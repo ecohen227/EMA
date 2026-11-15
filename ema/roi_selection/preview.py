@@ -5,7 +5,7 @@ from functools import lru_cache
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QComboBox, QGroupBox, QHBoxLayout, QLabel, QVBoxLayout
 
-from ..recordings import is_online_only, list_recordings, load_stack
+from ..recordings import list_recordings, load_stack
 from .detection import detect, detection_files, mean_recording, roi_trace
 from .plots import ImageView, TraceView
 
@@ -86,8 +86,6 @@ class SettingsPreview(QGroupBox):
         if folder is None or self.settings is None:
             return self.show_message("No recording folder to show as an example.")
         paths = detection_files(list_recordings(folder), self.settings)
-        if any(is_online_only(path) for path in paths):
-            return self.show_message("⚠ These recordings are stored online only. Choose another example folder.")
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:

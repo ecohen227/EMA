@@ -1,0 +1,265 @@
+{
+  "format": "EMA evoked protocol",
+  "format_version": 1,
+  "name": "11P pulse train",
+  "description": "Ten pulses at 10 Hz and a recovery pulse after 0.5 to 5 s. Each stimulated recording is divided by the unstimulated one recorded after it; responses are rises above the baseline before the train.",
+  "sampling_interval_ms": 4.849,
+  "trace": "ratio to unstimulated",
+  "recordings": {
+    "measure": "listed recordings",
+    "unstimulated_partner": "as listed",
+    "condition": {
+      "name": "Delay",
+      "unit": "ms"
+    },
+    "skip_words": [],
+    "windows_follow_condition": true,
+    "list": [
+      {
+        "file": "hi1.tif",
+        "unstimulated": "no2.tif",
+        "condition": 500.0,
+        "baselines": {
+          "BLPre11": [401, 413]
+        },
+        "pulses": {
+          "P11": {
+            "stimulus": 412,
+            "peak": [413, 443]
+          }
+        }
+      },
+      {
+        "file": "hi2.tif",
+        "unstimulated": "no3.tif",
+        "condition": 1000.0,
+        "baselines": {
+          "BLPre11": [504, 515]
+        },
+        "pulses": {
+          "P11": {
+            "stimulus": 515,
+            "peak": [516, 541]
+          }
+        }
+      },
+      {
+        "file": "hi3.tif",
+        "unstimulated": "no4.tif",
+        "condition": 2500.0,
+        "baselines": {
+          "BLPre11": [814, 825]
+        },
+        "pulses": {
+          "P11": {
+            "stimulus": 825,
+            "peak": [825, 847]
+          }
+        }
+      },
+      {
+        "file": "hi4.tif",
+        "unstimulated": "no5.tif",
+        "condition": 5000.0,
+        "baselines": {
+          "BLPre11": [1331, 1341]
+        },
+        "pulses": {
+          "P11": {
+            "stimulus": 1340,
+            "peak": [1342, 1367]
+          }
+        }
+      }
+    ]
+  },
+  "baselines": {
+    "BL": [83, 101],
+    "BLPre11": "per recording"
+  },
+  "pulses": [
+    {
+      "name": "P1",
+      "stimulus": 103,
+      "peak": [105, 124],
+      "baseline": "BL"
+    },
+    {
+      "name": "P2",
+      "stimulus": 124,
+      "peak": [125, 144],
+      "baseline": "BL"
+    },
+    {
+      "name": "P3",
+      "stimulus": 144,
+      "peak": [145, 164],
+      "baseline": "BL"
+    },
+    {
+      "name": "P4",
+      "stimulus": 165,
+      "peak": [165, 185],
+      "baseline": "BL"
+    },
+    {
+      "name": "P5",
+      "stimulus": 185,
+      "peak": [186, 200],
+      "baseline": "BL"
+    },
+    {
+      "name": "P6",
+      "stimulus": 206,
+      "peak": [201, 226],
+      "baseline": "BL"
+    },
+    {
+      "name": "P7",
+      "stimulus": 227,
+      "peak": [227, 247],
+      "baseline": "BL"
+    },
+    {
+      "name": "P8",
+      "stimulus": 247,
+      "peak": [248, 267],
+      "baseline": "BL"
+    },
+    {
+      "name": "P9",
+      "stimulus": 268,
+      "peak": [268, 288],
+      "baseline": "BL"
+    },
+    {
+      "name": "P10",
+      "stimulus": 289,
+      "peak": [289, 310],
+      "baseline": "BL"
+    },
+    {
+      "name": "P11",
+      "stimulus": "per recording",
+      "peak": "per recording",
+      "baseline": "BLPre11"
+    }
+  ],
+  "comparisons": [
+    {
+      "name": "P2/P1",
+      "pulse": "P2",
+      "relative_to": "P1",
+      "as": "percent"
+    },
+    {
+      "name": "P10/P1",
+      "pulse": "P10",
+      "relative_to": "P1",
+      "as": "percent"
+    },
+    {
+      "name": "P11/P1",
+      "pulse": "P11",
+      "relative_to": "P1",
+      "as": "percent"
+    },
+    {
+      "name": "P11/P10",
+      "pulse": "P11",
+      "relative_to": "P10",
+      "as": "percent"
+    },
+    {
+      "name": "nP1/BL",
+      "pulse": "P1",
+      "relative_to": "P1",
+      "as": "ratio"
+    },
+    {
+      "name": "nP2/BL",
+      "pulse": "P2",
+      "relative_to": "P1",
+      "as": "ratio"
+    },
+    {
+      "name": "nP3/BL",
+      "pulse": "P3",
+      "relative_to": "P1",
+      "as": "ratio"
+    },
+    {
+      "name": "nP4/BL",
+      "pulse": "P4",
+      "relative_to": "P1",
+      "as": "ratio"
+    },
+    {
+      "name": "nP5/BL",
+      "pulse": "P5",
+      "relative_to": "P1",
+      "as": "ratio"
+    },
+    {
+      "name": "nP6/BL",
+      "pulse": "P6",
+      "relative_to": "P1",
+      "as": "ratio"
+    },
+    {
+      "name": "nP7/BL",
+      "pulse": "P7",
+      "relative_to": "P1",
+      "as": "ratio"
+    },
+    {
+      "name": "nP8/BL",
+      "pulse": "P8",
+      "relative_to": "P1",
+      "as": "ratio"
+    },
+    {
+      "name": "nP9/BL",
+      "pulse": "P9",
+      "relative_to": "P1",
+      "as": "ratio"
+    },
+    {
+      "name": "nP10/BL",
+      "pulse": "P10",
+      "relative_to": "P1",
+      "as": "ratio"
+    }
+  ],
+  "fits": [],
+  "kinetics": {
+    "measures": [],
+    "pulses": null,
+    "smoothing_frames": 3
+  },
+  "spatial": {
+    "measures": [],
+    "pulses": ["P1"],
+    "near_to_far": [],
+    "settings": {
+      "frames_before_peak": 1,
+      "frames_from_peak": 4,
+      "smoothing_px": 1.0,
+      "pixel_um": 16.0,
+      "max_radius_um": 960.0,
+      "integrate_um": 640.0,
+      "tail_from_um": 320.0,
+      "region_um": 480.0,
+      "near_from_um": 0.0,
+      "near_to_um": 160.0,
+      "far_from_um": 400.0,
+      "far_to_um": 640.0,
+      "exclude_electrode": true
+    }
+  },
+  "slice_summary": {
+    "statistics": [],
+    "condition_range": null,
+    "baseline_spread": false
+  }
+}

@@ -352,4 +352,4 @@ def test_launcher_offers_four_packages(app):
     launcher = Launcher()
     packages = [b for b in launcher.findChildren(QPushButton) if "\n" in b.text()]
     assert len(packages) == 4
-    assert [b.isEnabled() for b in packages] == [True, False, False, False]
+    assert [b.isEnabled() for b in packages] == [True, True, True, False]

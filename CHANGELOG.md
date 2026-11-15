@@ -1,5 +1,150 @@
 # Changelog
 
+## 3.0.0a4 — 2026-11-14
+
+### New: Evoked Analysis
+
+- Measures every recording of the folders of an ROI file with a protocol (`ema/evoked/analysis.py`), with each
+  folder's ROI and electrode; flagged recordings are left out, and a flagged unstimulated recording is never a
+  partner. The values are those the configurator shows on an example recording (a test checks this). A recording's
+  condition is the one listed for it, or the number its file name starts with (`Protocol.condition_of`).
+- **Kept results.** `evoked_analysis.json` in the output folder keeps the protocol, the labels, the groups and the
+  results of every folder (`"format": "EMA evoked analysis"`). A run measures only folders that are new or whose
+  fingerprint changed (ROI, electrode, flags, names, sizes and dates of the recordings); other folders keep their
+  results; folders that are not in the ROI file are kept or dropped, as the user answers (kept: an analysis can collect several ROI files; dropped: the same recordings moved). With another protocol or EMA version every folder is measured
+  again and the files replaced, after asking. A stopped run keeps the folders it finished.
+- **Two Excel files** for Prism (`ema/evoked/workbook.py`, new dependency openpyxl): `Evoked per recording.xlsx`
+  (one row per recording) and `Evoked per slice.xlsx` (one row per slice), each with the full table, one sheet per
+  measure laid out as a Prism grouped table (per recording: a row per condition, a group of columns per group of
+  slices, a column per slice, groups padded to the same width) or column table (per slice; or grouped, with a
+  label as rows), a *Notes* sheet (what was not measured and why, labels to check) and an *About* sheet (protocol,
+  labels, every measure's definition). Empty cells for values that could not be measured. A file open in Excel is
+  reported, and *Write the tables* writes both again without measuring.
+- **Labels from folder names** (`ema/labels.py`): labels with values and their spellings, and number labels
+  (`Slice #`, `F#`); folder names are cut into words, spellings match whole words in order, and the innermost
+  folder wins. Disagreeing folder names and names with two values are pointed out. **Near misses** (one or two
+  letters off, one word starting the other, or a short form such as CNTRL for control) are listed for the user to
+  assign to a value or mark as not a label. Defaults for the lab's folders: Line, Genotype, Treatment, Duration,
+  Sex, Animal, Slice. Checked on the 911 recording folders of the study index: every label found except the
+  duration of plain `CTRL` folders, no false near misses, and one animal folder filed inside another found.
+- **Window** (`ema/evoked_analysis/`): ROI file and folder filter, protocol (library or file), output folder,
+  groups; tabs with every folder and its labels (missing and doubtful ones coloured), the label editor (import,
+  export, defaults) and the near misses. Runs in a worker thread with progress and *Stop*. Opened from the start
+  window.
+- `ema.evoked.traces.make_movie` builds the pixel movie for the spatial measures.
+
+### Removed: OneDrive handling
+
+- EMA assumes every recording is on the computer. `ema.recordings.is_online_only` is gone, and with it the
+  question before downloading online-only recordings in ROI Selection, the online-only messages of its setup
+  example, and the online-only checks of the configurator's example folder.
+
+### New: the Evoked Analysis Configurator
+
+- Makes, checks and saves **protocols**: the trace to measure (ROI brightness, or stimulated ÷ unstimulated in %),
+  how each stimulated recording finds its unstimulated partner, which recordings, the baseline and peak window of
+  every pulse, comparisons, exponential fits, kinetic and spatial measures, slice summaries and fits across
+  conditions. Saved as JSON (`"format": "EMA evoked protocol"`) in a library: built-in
+  protocols in `ema/evoked/presets`, the user's in `protocols/` of the program folder.
+- **One template** for every protocol (`ema/evoked/template.py`): a train of pulses (first stimulus, number,
+  interval, window lengths, own or shared baselines) and an optional recovery pulse at a list of delays, counted
+  from the end of the train or from its last pulse. *New…* opens it as a form, with *Fill in like 2P / 11P*.
+- Tried live on an example folder (ROI and electrode found automatically or taken from an ROI Selection file):
+  windows, stimuli, baselines, peaks and fits drawn on the trace; windows, fits and stimuli can be dragged; every
+  measure the analysis will produce is listed with its value on the example and its definition.
+- **Fits** are drawn as purple bands in the middle third of the plot, with the fitted curve and τ on them, and can
+  be dragged. A fit can be single or **double** exponential (τ fast, τ slow, fast fraction).
+- **Kinetics** tab: time to peak, onset, rise 10–90 and 20–80, max rise slope, half-width, half-decay, 1/e decay,
+  max decay slope, area and signal-to-noise, on chosen pulses, with *All* / *None*.
+- **Spatial** tab: footprint width λ, footprint half-width, r50, tail fraction, centroid offset, elongation,
+  heterogeneity, hot spots, release latency slope and far-near delay on chosen pulses, and near-to-far indices of
+  chosen comparisons, with the settings of the maps and rings. The plot shows the response map (or half-rise
+  latency map) with its bands and centroid, and the ring profile with the footprint fit.
+- **Decay with distance** (Spatial tab): the response map followed from the peak on in bins as long as the map,
+  up to the next stimulus, the end of the recording or *Follow the decay for at most* (`follow_ms`, 1500 ms).
+  Measures: *far-near decay ratio* (half-decay time of the far band ÷ that of the near band) and *decay-distance
+  slope* (Theil–Sen slope of each ring's half-decay time against its distance, ms/mm). *Show: Decay with distance*
+  draws the two bands against time. The footprint width is measured at the peak only: widths fitted to every bin
+  (with the measures *width ratio at half decay* and *contraction rate*) were tried and dropped as too noisy.
+- **Fits across conditions** (last tab): a recovery curve, plateau − (plateau − start)·exp(−x/τ), with the plateau
+  fitted or fixed (e.g. P11/P1 against the delay, fixed at 100 %), or a saturation (Hill) curve,
+  top·xⁿ ÷ (halfⁿ + xⁿ) (e.g. the response against the current: the half-max current). Fitted per slice; kept only
+  with more recordings than free parameters and a result inside set bounds.
+- **Unstimulated partners for every protocol.** By default each stimulated recording is paired with the
+  unstimulated recording (`no<n>…`) made right after it, found from the TIFF time stamps (DateTime tag), or the
+  one made right before it if none was made after. A listed recording can name another partner; partners can also
+  be named for every listed recording (`"as listed"`), or not used (`"none"`). With a brightness trace the partner
+  corrects bleaching: stimulated × mean(partner over the first baseline window) ÷ partner, which keeps brightness
+  units and dF/F; maps are corrected pixel by pixel. New protocol entry `recordings.unstimulated_partner`; a file
+  without it is read as before (`"as listed"` for a ratio trace, `"none"` for brightness). A stimulated ÷
+  unstimulated trace no longer needs a list of recordings. `ema/evoked/traces.py` makes the trace;
+  `ema.recordings.acquisition_time` and `recorded_after` find the partner.
+- Built-in protocols: *2P paired pulse* now corrects with the unstimulated recording made right after each
+  recording (the standard procedure from now on); the new *2P paired pulse, uncorrected* measures as recorded, for
+  slices without unstimulated recordings; *11P pulse train* names its partners as before.
+- The kinetic and spatial measures are one catalogue (`ema/evoked/metrics.py`), from which the tabs, the measure
+  list and the documentation tables are built, so new measures can be added in one place. Each is described in
+  full (formula, method, when it is empty, what it reflects, caveats) in `ema/evoked/metric_details.py`, from
+  which the documentation's measure reference page is built; a test requires an entry for every measure.
+- Documentation: new pages *Measure reference* and *Choosing measures* (with the literature behind them), the
+  trace and partner rules, decay with distance, and fits across conditions. The measure reference describes every
+  measure a protocol can produce (baselines, peaks, responses, comparisons, fits, kinetic and spatial measures,
+  near-to-far indices, slice summaries, fits across conditions) the same way: how it is named, unit, definition,
+  formula, method, when it is empty, what it reflects, caveats and a worked example whose numbers are checked by
+  the tests; plus how measures are named and what each unit means. Built from `ema/evoked/metric_details.py`.
+- Fixed: switching protocols while the Spatial tab was open raised "'NoneType' object has no attribute
+  'get_position'" and then a KeyError on the colour bar. The colour bar now has an area of its own that is
+  redrawn in place.
+- *Place pulses…* builds a regular train in an existing protocol.
+- Any window or pulse can be timed **per recording** in a list of recordings, which is how the recovery pulse
+  of the 11P protocol is described. With *Per-recording windows follow the condition*, changing a recording's
+  delay moves its windows by as much.
+- `ema/evoked/measures.py` measures one trace with a protocol and summarises a slice; `ema/evoked/spatial.py`
+  measures a movie.
+- `Blitter` moved from `ema/roi_selection/plots.py` to `ema/blit.py`, to be shared.
+
+### The spatial measures compared with the metric study
+
+The definitions follow the study's `footprint.py`, `maps_5cur.py`, `vein_stats.py` and `latency_batch.py`, with
+three differences:
+
+- The footprint fit and the half-width use each ring's mean distance from the centre (about k + 0.5 pixels for
+  ring k); the study used k. On a synthetic Lorentzian of λ = 300 µm the study's convention gives about 294 µm,
+  this one 300 µm.
+- Response maps are made from the raw frames relative to the pulse's own baseline window, blurred once
+  (σ 1 px by default); the study smoothed every frame of a dF/F movie relative to frames 10–95.
+- The near-to-far bands are settings (near 0–160 µm, far 400–640 µm by default, as in `vein_stats.py`).
+
+On the sample slice (300 µA) the release-latency slope is 9.3 ms/mm; the study's pilot reported 18.6 ms/mm on
+average. Not compared on more slices.
+
+### The built-in protocols reproduce EMMA 2P v1.0 and 11P v1.1
+
+`tests/test_evoked_measures.py` checks on synthetic traces that every value equals, bit for bit, the value of
+the earlier programs' formulas (taken from EMA 2.4's `analysis.py`, which matched EMMA byte for byte). For 2P this
+is *2P paired pulse, uncorrected*; *2P paired pulse* applies the same formulas to the corrected trace, whose
+correction is checked against EMA 2.4's `divide_background` and whose pairing follows its `background_pairs`
+(except that a recording without a time stamp gets no partner instead of the mean of every unstimulated one):
+
+| EMMA column | Measure with the built-in protocol |
+|---|---|
+| 2P `B1`, `P1`, `B2`, `P2` | `B1`, `P1`, `B2`, `P2` |
+| 2P `P1 dF/F (%)`, `P2 dF/F (%)` | `P1 response`, `P2 response` (brightness trace: P ÷ B × 100 − 100) |
+| 2P `PPR` | `PPR` (comparison P2 ÷ P1, as a ratio) |
+| 2P `Tau (ms)` | `Tau` (fit 4 frames after the maximum of P1, 412 frames) |
+| 2P aggregated `<x>_min`, `_max`, `_mean`, `_mean_100_400` | `<x> min`, `<x> max`, `<x> mean`, `<x> mean 100-400` |
+| 2P aggregated `B1_max_abs_diff`, `B2_max_abs_diff` | `B1 spread`, `B2 spread` |
+| 11P `BL`, `P1` … `P10`, `BLPre11`, `P11` | the same names (stimulated ÷ unstimulated trace) |
+| 11P `P1/BL` … `P10/BL`, `P11/BLPre11` | `P1 response` … `P11 response` (P − baseline) |
+| 11P `P2/P1`, `P10/P1`, `P11/P1`, `P11/P10` | the same names (comparisons in percent) |
+| 11P `nP1/BL` … `nP10/BL` | the same names (comparisons with P1, as ratios) |
+
+Not carried over, because they are not measures of a protocol: the ROI position, the current, the delay and the
+recording name columns (the analysis will write them), and EMMA's rounding of the 2P tables to 2 decimals.
+The stimulus frames of the built-in protocols (P1 at frame 103, the 11P recovery pulses at 412, 515, 825 and
+1340, each delay counted from the end of the train) are worked out from the protocol timing; they only affect the
+new kinetic measures.
+
 ## 3.0.0a3 — 2026-11-14
 
 - **Setup dialog:** the settings sections (*ROI*, *Timing*, *Electrode*, *Display*) are closed by default and

@@ -237,8 +237,3 @@ Continue later
    Start ROI Selection again and choose the same output folder. The setup
    dialog shows the saved settings and says how many folders are already
    done.
-
-Recordings on OneDrive
-   Reading a file that is stored online only downloads it. EMA asks once
-   before it does that. If you answer *No*, online-only recordings are
-   skipped and their cards say so.

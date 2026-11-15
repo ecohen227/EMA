@@ -7,6 +7,7 @@ folder that holds at least one. Recordings are only ever read, never changed.
 import logging
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 
 import tifffile
@@ -17,7 +18,6 @@ logging.getLogger("tifffile").setLevel(logging.ERROR)
 TIFF_SUFFIXES = (".tif", ".tiff")
 MIN_MOVIE_BYTES = 1_000_000  # smaller TIFFs are single reference images, not movies
 NO_STIM_NAME = re.compile(r"^no\s*\d", re.IGNORECASE)
-ONLINE_ONLY = 0x400000 | 0x1000  # Windows attributes of a OneDrive file that is not downloaded
 
 
 def list_recordings(folder):
@@ -64,6 +64,30 @@ def is_no_stim(path):
     return bool(NO_STIM_NAME.match(Path(path).name))
 
 
-def is_online_only(path):
-    """True for a OneDrive file that is not on this computer yet. Reading it would download it."""
-    return bool(getattr(os.stat(path), "st_file_attributes", 0) & ONLINE_ONLY)
+def acquisition_time(path):
+    """The time the camera software stored in the TIFF (its DateTime tag), or None if there is none."""
+    try:
+        with tifffile.TiffFile(path) as tif:
+            tag = tif.pages[0].tags.get("DateTime")
+            return datetime.strptime(str(tag.value).strip(), "%Y:%m:%d %H:%M:%S") if tag else None
+    except (OSError, ValueError, tifffile.TiffFileError):
+        return None
+
+
+def recorded_after(path, candidates, times=None):
+    """The candidate recorded right after `path` (by TIFF time stamp), or, if none was, the one right before.
+
+    Returns (partner, reason): the partner's path, or None and a sentence saying why there is none.
+    `times` may hold time stamps already read, by path.
+    """
+    times = {} if times is None else times
+    for item in [path, *candidates]:
+        if item not in times:
+            times[item] = acquisition_time(item)
+    if times[path] is None:
+        return None, f"{Path(path).name} has no time stamp, so the unstimulated recording made after it is not known."
+    timed = sorted((times[c], c) for c in candidates if times[c] is not None)
+    if not timed:
+        return None, "No unstimulated recording with a time stamp is in the folder."
+    after = [c for t, c in timed if t > times[path]]
+    return (after[0] if after else timed[-1][1]), ""

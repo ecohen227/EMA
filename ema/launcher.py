@@ -7,6 +7,8 @@ from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
 from . import __version__
+from .evoked_analysis.window import AnalysisWindow
+from .evoked_configurator.window import ConfiguratorWindow
 from .roi_selection.setup_dialog import SetupDialog
 from .roi_selection.window import RoiSelectionWindow
 
@@ -21,11 +23,19 @@ def open_roi_selection(launcher):
     return RoiSelectionWindow(dialog.selections, dialog.output_folder)
 
 
+def open_configurator(launcher):
+    return ConfiguratorWindow()
+
+
+def open_analysis(launcher):
+    return AnalysisWindow()
+
+
 # name, what it does, the function that opens it (None while it is not built yet)
 PACKAGES = [
     ("ROI Selection", "Find the ROI and the electrode of every recording, and flag bad recordings.", open_roi_selection),
-    ("Evoked Analysis", "Measure the evoked responses inside the selected ROIs.", None),
-    ("Evoked Analysis Configurator", "Set the windows, fits and comparisons of the evoked analysis.", None),
+    ("Evoked Analysis", "Measure the evoked responses inside the selected ROIs, and write the tables for Prism.", open_analysis),
+    ("Evoked Analysis Configurator", "Set the pulses, windows and measures of the evoked analysis.", open_configurator),
     ("Spontaneous Event Analysis", "Find and measure spontaneous events in unstimulated recordings.", None),
 ]
 

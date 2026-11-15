@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ema"
-version = "3.0.0a3"
+version = "3.0.0a4"
 description = "Analysis of electrically stimulated brain-slice recordings"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -14,6 +14,7 @@ dependencies = [
     "tifffile>=2022.2",
     "matplotlib>=3.6",
     "PyQt5>=5.15",
+    "openpyxl>=3.1",
 ]
 
 [project.optional-dependencies]
@@ -23,10 +24,11 @@ dev = ["pytest", "sphinx>=7", "furo"]
 ema = "ema.app:main"
 
 [tool.setuptools]
-packages = ["ema", "ema.roi_selection"]
+packages = ["ema", "ema.roi_selection", "ema.evoked", "ema.evoked_analysis", "ema.evoked_configurator"]
 
 [tool.setuptools.package-data]
 ema = ["assets/*"]
+"ema.evoked" = ["presets/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

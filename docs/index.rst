@@ -17,12 +17,15 @@ the next one as a file.
      - Finds the ROI and the electrode of every recording folder, lets you
        correct them and flag bad recordings.
      - Ready
-   * - Evoked Analysis
-     - Measures the evoked responses inside the selected ROIs.
-     - Planned
-   * - Evoked Analysis Configurator
-     - Sets the windows, fits and comparisons of the evoked analysis.
-     - Planned
+   * - :doc:`Evoked Analysis <evoked_analysis/index>`
+     - Measures the evoked responses inside the selected ROIs with a
+       protocol, and writes the results, labelled from the folder names, in
+       two Excel files laid out for Prism.
+     - Ready
+   * - :doc:`Evoked Analysis Configurator <evoked_configurator/index>`
+     - Makes the protocols the evoked analysis measures with: the pulses,
+       their windows, and what is derived from them.
+     - Ready
    * - Spontaneous Event Analysis
      - Finds and measures spontaneous events in unstimulated recordings.
      - Planned
@@ -33,6 +36,8 @@ the next one as a file.
 
    getting_started
    roi_selection/index
+   evoked_configurator/index
+   evoked_analysis/index
 
 .. toctree::
    :maxdepth: 1

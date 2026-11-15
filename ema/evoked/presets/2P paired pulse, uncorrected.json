@@ -1,0 +1,84 @@
+{
+  "format": "EMA evoked protocol",
+  "format_version": 1,
+  "name": "2P paired pulse, uncorrected",
+  "description": "Two pulses 4 s apart, each stimulated recording measured as it is, without an unstimulated partner: for slices recorded without unstimulated recordings. Otherwise the same as 2P paired pulse.",
+  "sampling_interval_ms": 4.849,
+  "trace": "brightness",
+  "recordings": {
+    "measure": "every stimulated recording",
+    "unstimulated_partner": "none",
+    "condition": {
+      "name": "Current",
+      "unit": "µA"
+    },
+    "skip_words": ["red"],
+    "windows_follow_condition": false,
+    "list": []
+  },
+  "baselines": {
+    "B1": [81, 93],
+    "B2": [904, 925]
+  },
+  "pulses": [
+    {
+      "name": "P1",
+      "stimulus": 103,
+      "peak": [83, 205],
+      "baseline": "B1"
+    },
+    {
+      "name": "P2",
+      "stimulus": 928,
+      "peak": [904, 1125],
+      "baseline": "B2"
+    }
+  ],
+  "comparisons": [
+    {
+      "name": "PPR",
+      "pulse": "P2",
+      "relative_to": "P1",
+      "as": "ratio"
+    }
+  ],
+  "fits": [
+    {
+      "name": "Tau",
+      "kind": "single",
+      "after": "P1",
+      "start": 4,
+      "length": 412
+    }
+  ],
+  "kinetics": {
+    "measures": [],
+    "pulses": null,
+    "smoothing_frames": 3
+  },
+  "spatial": {
+    "measures": [],
+    "pulses": ["P1"],
+    "near_to_far": [],
+    "settings": {
+      "frames_before_peak": 1,
+      "frames_from_peak": 4,
+      "smoothing_px": 1.0,
+      "pixel_um": 16.0,
+      "max_radius_um": 960.0,
+      "integrate_um": 640.0,
+      "tail_from_um": 320.0,
+      "region_um": 480.0,
+      "near_from_um": 0.0,
+      "near_to_um": 160.0,
+      "far_from_um": 400.0,
+      "far_to_um": 640.0,
+      "exclude_electrode": true
+    }
+  },
+  "slice_summary": {
+    "statistics": ["min", "max", "mean"],
+    "condition_range": [100.0, 400.0],
+    "baseline_spread": true
+  }
+}

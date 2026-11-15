@@ -26,8 +26,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ..recordings import is_online_only, list_recordings, load_stack
-from .detection import baseline_image, detect, detection_files, folder_mean, peak_frame, response_at, roi_trace
+from ..recordings import list_recordings, load_stack
+from .detection import baseline_image, detect, folder_mean, peak_frame, response_at, roi_trace
 from .plots import EDIT_ELECTRODE, MOVE_ROI, ImageView, TraceView
 from .selections import AUTOMATIC, FILE_NAME, MANUAL, FolderSelection
 from .setup_dialog import SetupDialog
@@ -53,7 +53,6 @@ class RoiSelectionWindow(QMainWindow):
         self.selections = selections
         self.output_folder = output_folder
         self.folders = selections.recording_folders()
-        self.downloads_allowed = None  # asked once, when an online-only recording is first needed
 
         # Recordings are large and slow to read, so the last ones stay in memory.
         self.load = lru_cache(maxsize=24)(load_stack)
@@ -285,28 +284,11 @@ class RoiSelectionWindow(QMainWindow):
         stack, files = self.folder_mean(folder)
         return detect(stack, self.settings, files)
 
-    def may_read(self, paths):
-        """False if reading these files would download them from OneDrive and the user does not want that."""
-        if not any(is_online_only(path) for path in paths):
-            return True
-        if self.downloads_allowed is None:
-            answer = QMessageBox.question(
-                self,
-                "Online-only recordings",
-                "Some recordings are stored online only (OneDrive). Reading them downloads them to this "
-                "computer.\n\nDownload recordings when they are needed?",
-            )
-            self.downloads_allowed = answer == QMessageBox.Yes
-        return self.downloads_allowed
-
     def stack_of(self, recording):
         """The movie of a recording of the open folder (by file name), or of its mean recording."""
         if recording == MEAN:
             return self.folder_mean(self.folder)[0]
-        path = self.folder / recording
-        if not self.may_read([path]):
-            raise ValueError(f"{recording} is online only and was not downloaded.")
-        stack = self.load(path)
+        stack = self.load(self.folder / recording)
         if stack.shape[1:] != self.selection.image_shape:
             raise ValueError(f"{recording} has another image size than the rest of the folder.")
         return stack
@@ -321,8 +303,6 @@ class RoiSelectionWindow(QMainWindow):
         self.folder = self.folders[row]
         self.recordings = list_recordings(self.folder)
         self.detection = self.selection = self.stack = None
-        if not self.may_read(detection_files(self.recordings, self.settings)):
-            return self.show_problem("These recordings are online only and were not downloaded.")
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
@@ -610,8 +590,6 @@ class RoiSelectionWindow(QMainWindow):
             if progress.wasCanceled():
                 break
             try:
-                if not self.may_read(detection_files(list_recordings(folder), self.settings)):
-                    raise ValueError("online only")
                 detection = self._detect(folder)
             except (OSError, ValueError):
                 skipped += 1
