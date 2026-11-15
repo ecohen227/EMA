@@ -11,6 +11,8 @@ from .evoked_analysis.window import AnalysisWindow
 from .evoked_configurator.window import ConfiguratorWindow
 from .roi_selection.setup_dialog import SetupDialog
 from .roi_selection.window import RoiSelectionWindow
+from .spontaneous_analysis.window import SpontaneousAnalysisWindow
+from .spontaneous_configurator.window import SpontaneousConfiguratorWindow
 
 DOCUMENTATION = Path(__file__).parent.parent / "docs" / "_build" / "html" / "index.html"
 
@@ -31,12 +33,23 @@ def open_analysis(launcher):
     return AnalysisWindow()
 
 
+def open_spontaneous_configurator(launcher):
+    return SpontaneousConfiguratorWindow()
+
+
+def open_spontaneous_analysis(launcher):
+    return SpontaneousAnalysisWindow()
+
+
 # name, what it does, the function that opens it (None while it is not built yet)
 PACKAGES = [
     ("ROI Selection", "Find the ROI and the electrode of every recording, and flag bad recordings.", open_roi_selection),
     ("Evoked Analysis Configurator", "Set the pulses, windows and measures of the evoked analysis.", open_configurator),
     ("Evoked Analysis", "Measure the evoked responses in every ROI, and write the tables for Prism.", open_analysis),
-    ("Spontaneous Event Analysis", "Find and measure spontaneous events in unstimulated recordings.", None),
+    ("Spontaneous Event Configurator", "Set how spontaneous events are found and what is measured on them.",
+     open_spontaneous_configurator),
+    ("Spontaneous Event Analysis", "Find and measure spontaneous events in every ROI file folder, and write the tables "
+     "for Prism.", open_spontaneous_analysis),
 ]
 
 

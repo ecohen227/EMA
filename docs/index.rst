@@ -2,7 +2,7 @@ EMA
 ===
 
 EMA analyses movies of electrically stimulated brain slices (dLight and
-similar sensors, recorded as TIFF stacks). It is a set of four packages
+similar sensors, recorded as TIFF stacks). It is a set of five packages
 behind one start window. Each package does one job and hands its result to
 the next one as a file.
 
@@ -26,9 +26,15 @@ the next one as a file.
        protocol, and writes the results, labelled from the folder names, in
        two Excel files laid out for Prism.
      - Ready
-   * - Spontaneous Event Analysis
-     - Finds and measures spontaneous events in unstimulated recordings.
-     - Planned
+   * - :doc:`Spontaneous Event Configurator <spontaneous_configurator/index>`
+     - Makes the detectors the spontaneous-event analysis uses: how events
+       are found and what is measured on them.
+     - Ready
+   * - :doc:`Spontaneous Event Analysis <spontaneous_analysis/index>`
+     - Searches the unstimulated recordings of every folder under a
+       recordings folder with a detector, and writes the events and slices, labelled from the
+       folder names, in two Excel files laid out for Prism.
+     - Ready
 
 .. toctree::
    :maxdepth: 2
@@ -38,6 +44,8 @@ the next one as a file.
    roi_selection/index
    evoked_configurator/index
    evoked_analysis/index
+   spontaneous_configurator/index
+   spontaneous_analysis/index
 
 .. toctree::
    :maxdepth: 1

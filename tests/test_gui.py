@@ -348,8 +348,8 @@ def test_settings_example_starts_with_the_open_folder(window, io_folder):
     assert "ROI centre" in dialog.preview.message.text()
 
 
-def test_launcher_offers_four_packages(app):
+def test_launcher_offers_five_packages(app):
     launcher = Launcher()
     packages = [b for b in launcher.findChildren(QPushButton) if "\n" in b.text()]
-    assert len(packages) == 4
-    assert [b.isEnabled() for b in packages] == [True, True, True, False]
+    assert len(packages) == 5
+    assert all(b.isEnabled() for b in packages)

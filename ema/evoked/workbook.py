@@ -18,39 +18,27 @@ Both end with *Notes* (what was skipped or could not be measured, and why)
 and *About* (the protocol, the labels, and what every measure is).
 """
 
-import math
-import os
-import re
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font
+from openpyxl.styles import Alignment
 
 from .. import __version__
+from ..excel import BOLD, Slice, TablesLocked, save_workbooks
+from ..excel import bold_rows as _bold_rows
+from ..excel import cell as _cell
+from ..excel import finish_table as _finish_table
+from ..excel import groups as _groups
+from ..excel import notes_sheet as _notes_sheet
+from ..excel import sheet_names as _sheet_names
+from ..excel import slices as _slices
+from ..excel import write_title as _title
+
+__all__ = ["PER_RECORDING", "PER_SLICE", "Slice", "TablesLocked", "write_workbooks"]
 
 PER_RECORDING = "Evoked per recording.xlsx"
 PER_SLICE = "Evoked per slice.xlsx"
-BOLD = Font(bold=True)
-GREY = Font(color="808080", italic=True)
-
-
-class TablesLocked(OSError):
-    """An output file could not be replaced, usually because it is open in Excel."""
-
-
-@dataclass
-class Slice:
-    """A measured folder with its labels, its group and its short name."""
-
-    key: str
-    result: object  # FolderResult
-    labels: dict
-    notes: list
-    group: tuple  # the values of the grouping labels
-    sort_key: tuple
-    short_name: str
 
 
 def write_workbooks(analysis):
@@ -61,64 +49,13 @@ def write_workbooks(analysis):
     """
     protocol = analysis.protocol_object()
     slices = _slices(analysis)
-    locked = []
-    paths = []
-    for name, make in ((PER_RECORDING, _per_recording), (PER_SLICE, _per_slice)):
-        path = analysis.folder / name
-        workbook = make(analysis, protocol, slices)
-        temporary = path.with_name(path.stem + ".tmp.xlsx")
-        workbook.save(temporary)
-        try:
-            os.replace(temporary, path)
-        except PermissionError:
-            temporary.unlink(missing_ok=True)
-            locked.append(name)
-            continue
-        paths.append(path)
-    if locked:
-        raise TablesLocked(f"{' and '.join(locked)} could not be replaced. Close it in Excel, then write the tables again.")
-    return paths
+    books = {PER_RECORDING: _per_recording(analysis, protocol, slices), PER_SLICE: _per_slice(analysis, protocol, slices)}
+    return save_workbooks(analysis.folder, books)
 
 
 # ---------------------------------------------------------------------------
 # Slices and groups
 # ---------------------------------------------------------------------------
-
-
-def _slices(analysis):
-    labels = analysis.labels
-    grouping = [labels.label(name) for name in analysis.group_by if labels.label(name)]
-    numbers = [label for label in labels.labels if label.is_number and label not in grouping]
-    found = []
-    for key, result in analysis.folders.items():
-        if not result.recordings:
-            continue
-        read = analysis.folder_labels(result)
-        values = read.values
-        group = tuple(values[label.name] for label in grouping)
-        sort_key = (
-            tuple(label.sort_key(values[label.name]) for label in grouping),
-            tuple(label.sort_key(values[label.name]) for label in labels.labels),
-            result.name.lower(),
-        )
-        named = [f"{label.name} {values[label.name]}" for label in numbers if values[label.name]]
-        short = " ".join(named) if named else "/".join(Path(result.name).parts[-2:])
-        notes = list(read.notes) + [f"No {label.name} in the folder names." for label in grouping if not values[label.name]]
-        found.append(Slice(key, result, values, notes, group, sort_key, short))
-    return sorted(found, key=lambda s: s.sort_key)
-
-
-def _group_name(analysis, group):
-    names = [name for name in analysis.group_by if analysis.labels.label(name)]
-    return " ".join(value or f"(no {name})" for name, value in zip(names, group)) or "All slices"
-
-
-def _groups(analysis, slices):
-    """{group name: [slices]} in the order of the labels' values."""
-    groups = {}
-    for item in slices:
-        groups.setdefault(_group_name(analysis, item.group), []).append(item)
-    return groups
 
 
 # ---------------------------------------------------------------------------
@@ -313,17 +250,6 @@ def _notes(slices, per_recording):
     return notes
 
 
-def _notes_sheet(workbook, notes):
-    sheet = workbook.create_sheet("Notes")
-    sheet.append(["Folder", "Recording", "Note"])
-    for note in notes:
-        sheet.append(note)
-    if not notes:
-        sheet.append(["Nothing to note: every recording was measured."])
-    _finish_table(sheet, 3)
-    sheet.column_dimensions["C"].width = 100
-
-
 def _about_sheet(workbook, analysis, protocol, measures, per):
     sheet = workbook.create_sheet("About")
     labels = analysis.labels
@@ -368,45 +294,3 @@ def _about_sheet(workbook, analysis, protocol, measures, per):
 
 def _heading(measure):
     return f"{measure.name} ({measure.unit})" if measure.unit else measure.name
-
-
-def _cell(value):
-    if value is None or isinstance(value, str):
-        return value
-    value = float(value)
-    return value if math.isfinite(value) else None
-
-
-def _title(sheet, title, hint):
-    sheet.append([title])
-    sheet.append([hint])
-    sheet.cell(1, 1).font = Font(bold=True, size=12)
-    sheet.cell(2, 1).font = GREY
-
-
-def _bold_rows(sheet, rows):
-    for row in rows:
-        for cell in sheet[row]:
-            cell.font = BOLD
-
-
-def _finish_table(sheet, label_columns):
-    _bold_rows(sheet, (1,))
-    sheet.freeze_panes = sheet.cell(2, min(label_columns, 2) + 1).coordinate
-    for index, column in enumerate(sheet.iter_cols(max_row=min(sheet.max_row, 200)), start=1):
-        longest = max((len(str(cell.value)) for cell in column if cell.value is not None), default=8)
-        sheet.column_dimensions[column[0].column_letter].width = min(max(longest + 2, 8), 60)
-
-
-def _sheet_names(names):
-    """A sheet name for each measure: at most 31 characters, without the characters Excel forbids, all different."""
-    found, taken = {}, {"recordings", "slices", "notes", "about"}
-    for name in names:
-        base = re.sub(r"[\[\]:*?\\]", "-", name.replace("/", "÷"))[:31].strip("'") or "Measure"
-        candidate, n = base, 2
-        while candidate.lower() in taken:
-            suffix = f" ({n})"
-            candidate, n = base[: 31 - len(suffix)] + suffix, n + 1
-        taken.add(candidate.lower())
-        found[name] = candidate
-    return found

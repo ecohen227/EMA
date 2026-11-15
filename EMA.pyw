@@ -7,4 +7,5 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from ema.app import main
 
-main()
+if __name__ == "__main__":  # the analyses' worker processes import this file again; only the first starts EMA
+    main()

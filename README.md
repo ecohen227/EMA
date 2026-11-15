@@ -1,6 +1,6 @@
 # EMA 3
 
-Analysis of electrically stimulated brain-slice recordings (TIFF movies). EMA 3 is a set of four packages behind
+Analysis of electrically stimulated brain-slice recordings (TIFF movies). EMA 3 is a set of five packages behind
 one start window:
 
 | Package | What it does | Status |
@@ -8,7 +8,8 @@ one start window:
 | **ROI Selection** | Finds the ROI and the electrode of every recording folder, lets you correct them and flag bad recordings | Ready |
 | **Evoked Analysis Configurator** | Makes the protocols the evoked analysis measures with: pulses, windows, comparisons, fits, kinetic and spatial measures, slice summaries | Ready |
 | **Evoked Analysis** | Measures the evoked responses inside the selected ROIs with a protocol, and writes the results, labelled from the folder names, in two Excel files laid out for Prism | Ready |
-| Spontaneous Event Analysis | Finds and measures spontaneous events in unstimulated recordings | Planned |
+| **Spontaneous Event Configurator** | Makes the detectors the spontaneous-event analysis uses: how events are found (detector v5 and its settings) and what is measured on them | Ready |
+| **Spontaneous Event Analysis** | Searches the unstimulated recordings of every folder under a recordings folder with a detector, and writes the events and slices, labelled from the folder names, in two Excel files laid out for Prism | Ready |
 
 ## Install (once per computer)
 
@@ -70,6 +71,24 @@ changed.
 
 A new run measures only new or changed folders and adds them to the files; with another protocol it measures
 everything again.
+
+## Spontaneous Event Configurator in one minute
+
+1. Choose **Spontaneous Event Configurator** in the start window.
+2. Pick a detector (*Detector v5*, the metric study's, is built in) and press **Example folder…** (and **ROI file…**)
+   to try it on a folder's unstimulated recordings (`no1.tif` …). The events found are circled on the slice, with
+   each one's peak map, trace and measures.
+3. Change the settings (every number of the detector is one) and the measures per event, recording and slice, and
+   press **Search** to see the change.
+4. **Save** it under a name of your own. Your detectors are kept in the `detectors` folder of EMA.
+
+## Spontaneous Event Analysis in one minute
+
+The same window as the Evoked Analysis, with a recordings folder and a detector: choose the recordings folder (and, if
+you have one, its ROI file for the reviewed electrodes; otherwise they are found automatically), the folders, a detector
+and an output folder, check the labels, and press **Run the analysis**. `Spontaneous per event.xlsx` (one row
+per event and per recording) and `Spontaneous per slice.xlsx` (one row per slice) appear in the output folder, each with
+one sheet per measure laid out for Prism. Recordings are searched several at a time (about 8 s each on one core).
 
 ## Documentation
 

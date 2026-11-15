@@ -49,6 +49,69 @@
   download and shows excerpts read from them at build time, so the page always matches what EMA writes.
 - `ema.evoked.traces.make_movie` builds the pixel movie for the spatial measures.
 
+### New: Spontaneous Event Configurator (the spontaneous-event package split in two)
+
+- The start window has five packages: the spontaneous-event package is split into the **Spontaneous Event
+  Configurator** (new) and the **Spontaneous Event Analysis** (still to come), like the evoked ones.
+- **Detector v5** of the metric study in `ema/spontaneous/detection.py`: dF/F against a 4th-order polynomial, a
+  3-frame running median, the dLight template (12 ms rise, 200 ms decay, 0.1 s before and 0.6 s after the onset) with
+  a straight-line baseline, a 128 µm Gaussian over the tissue, the field-wide median removed, a robust z per pixel,
+  regions of z ≥ 3 reaching θ 8, the echo rule (ratio 1, 0.53 s, 256 µm) and the 0.32 s end trim; sign-flipped and
+  time-reversed controls. The tissue is found in 64 µm blocks from the resting brightness and the ROI file's
+  electrode. **Checked against the study:** on the 62 unstimulated recordings of F5819, F5772, M5820 and M5771
+  (paired-pulse folders), with the study's centres and electrode masks, the same 55 events at the same frame and
+  pixel with the same z, and the same sign-flipped and time-reversed counts in every recording; the study's event
+  measures (width, fitted peak, fit quality, centre, local peak, rise, half-decay, distance to the electrode) agree to
+  rounding.
+- **Every number is a setting** (`ema/spontaneous/settings.py`, 32 settings in 9 groups: movie, tissue, signal,
+  template, spatial filter, detection, echoes, controls, measuring), with detector v5's values as defaults; times in
+  ms and distances in µm.
+- **Measures** (`ema/spontaneous/measures.py`): 21 per event (onset, z; fitted peak, width, full width at half
+  maximum, half-maximum area, size, fit quality from a Gaussian fitted to the peak map; local peak, time to peak, rise
+  10-90, rise speed, half-width, half-decay, decay tau, area from the pooled trace; x, y, distances to the release
+  centre and the electrode, electrode side), 8 per recording (events, searched time, rate, tissue area, density,
+  sign-flipped, time-reversed, pixel noise) and 16 per slice (counts, rates and the controls; share near the release
+  centre and on the electrode side; nearest-neighbour distance, clustering index, recurring sites; share together;
+  release per minute), plus per-slice summaries (median, mean, min, max) of any event measure. Each is described in
+  full in `ema/spontaneous/measure_details.py`; a test requires it.
+- **Detectors** are saved as JSON (`"format": "EMA spontaneous detector"`) in a library: one built in, *Detector v5*
+  (the 128 µm filter the study found best), in `ema/spontaneous/presets`; the user's in `detectors/`.
+- **Window** (`ema/spontaneous_configurator/`): the detector in three tabs (settings in sections built from the
+  settings list; event measures; recording and slice measures), tried on an example folder's unstimulated recordings
+  in a worker thread: each pixel's largest z with the events circled, the selected event's peak map with its
+  half-maximum circle and its pooled trace, and the table of its measures.
+- Documentation: *Spontaneous Event Configurator* pages (how the detector works, the configurator, every setting,
+  the measure reference, choosing measures with the study's values, the detector file), with figures made by
+  `docs/make_spontaneous_figures.py` from the sample unstimulated recording with two events planted in it.
+
+### New: Spontaneous Event Analysis
+
+- Searches the unstimulated recordings of every folder under a **recordings folder** with a detector
+  (`ema/spontaneous/analysis.py`, `Recordings`); the ROI file is optional. A folder it covers uses its reviewed
+  electrode, release centre and flags; any other folder's are found automatically from its stimulated recordings, as in
+  ROI Selection; a folder without stimulated recordings is searched without an electrode and its place measures are
+  empty. The *Electrode and centre* column says which. Recordings with a skip word are left out.
+  Recordings are searched in parallel, one process per core but one (at most 8), each limited to one thread: about
+  3 s per recording on a 12-core laptop, against 9 s one at a time.
+- **Kept results** in `spontaneous_analysis.json` (`"format": "EMA spontaneous analysis"`): the detector, labels, groups,
+  and every recording's and event's measures. A run searches only new or changed folders (fingerprints of the ROI file
+  entry and the recordings); other settings or skip words search everything again, after asking; a change
+  of the reported measures only rewrites the tables, since every measure is kept.
+- **Two Excel files** (`ema/spontaneous/workbook.py`): `Spontaneous per event.xlsx` (Events, Recordings, one Prism
+  column table per event measure with every event of each group) and `Spontaneous per slice.xlsx` (Slices with the
+  summaries of event measures, one Prism column or grouped table per slice measure), each with Notes and About.
+- **Checked on real recordings:** on the 25 paired-pulse folders of F5819, F5772, M5820 and M5771, with an ROI file
+  from ROI Selection's automatic detection, the same event count as the study's detector v5 in all 62 recordings the
+  study had searched; 137 events in all 151 unstimulated recordings (8.0 per minute, 2 sign-flipped, 1 time-reversed).
+- **One window for both analyses** (`ema/analysis_window.py`): the Evoked Analysis window, made general; each
+  analysis brings its title, protocol or detector library, files, and run and write functions (a `Kind`); the
+  spontaneous one also a recordings folder, with the ROI file optional. The label
+  editor moved to `ema/labels_editor.py`; what both analyses' Excel files share moved to `ema/excel.py`. The labels last
+  used are remembered for both (`folder_labels`).
+- `ema/__main__.py` and `EMA.pyw` start EMA only when run themselves, not when a worker process imports them.
+- Documentation: *Spontaneous Event Analysis* pages, with example files made by `docs/make_screenshots.py` from four
+  made-up slices (the sample unstimulated recording with planted events).
+
 ### Removed: OneDrive handling
 
 - EMA assumes every recording is on the computer. `ema.recordings.is_online_only` is gone, and with it the

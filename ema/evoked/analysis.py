@@ -87,6 +87,10 @@ class Analysis:
     slice_rows_by: str = ""  # a label whose values are the rows of the per-slice Prism sheets ('' for none)
     folders: dict = field(default_factory=dict)  # absolute path (posix) -> FolderResult
 
+    @property
+    def method(self):
+        return self.protocol
+
     @classmethod
     def open(cls, folder):
         """The analysis kept in an output folder, or a new one if there is none yet."""

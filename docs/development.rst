@@ -13,9 +13,12 @@ Layout
    ├── EMA.pyw                  double-click to start
    ├── ema/
    │   ├── app.py               starts Qt, shows errors in a dialog, opens the launcher
-   │   ├── launcher.py          the start window with the four packages
+   │   ├── launcher.py          the start window with the five packages
    │   ├── recordings.py        finding and reading TIFF movies (read-only)
    │   ├── labels.py            labels read from folder names, and near misses
+   │   ├── labels_editor.py     the Labels and Near misses tabs of both analyses
+   │   ├── analysis_window.py   the window both analyses share; each brings a Kind
+   │   ├── excel.py             what both analyses' Excel files share: slices, groups, Prism tables, saving
    │   ├── user_settings.py     remembers the last folders used
    │   ├── blit.py              fast redrawing of things that follow the mouse
    │   ├── evoked/              protocols and measuring (numpy only, no GUI)
@@ -32,9 +35,23 @@ Layout
    │   │   ├── library.py       built-in and saved protocols
    │   │   ├── presets.py       the built-in protocols, as code
    │   │   └── presets/         … and as the files EMA ships
+   │   ├── spontaneous/         spontaneous events (numpy only, no GUI)
+   │   │   ├── settings.py      every setting of the detector: default, label, help text
+   │   │   ├── detection.py     the detector (detector v5), step by step
+   │   │   ├── measures.py      the event, recording and slice measures
+   │   │   ├── measure_details.py  the full description of every measure, for the measure reference
+   │   │   ├── detector.py      the detector file, the built-in detector and the library
+   │   │   ├── analysis.py      searching the folders of an ROI file in parallel; the kept results
+   │   │   ├── workbook.py      the two Excel files, laid out for Prism
+   │   │   └── presets/         the built-in detectors, as the files EMA ships
+   │   ├── spontaneous_configurator/
+   │   │   ├── window.py        the configurator window
+   │   │   ├── settings_form.py the settings, in sections built from settings.py
+   │   │   └── example.py       the example folder, its release centre and electrode
    │   ├── evoked_analysis/
-   │   │   ├── window.py        the Evoked Analysis window and its worker thread
-   │   │   └── labels_editor.py the Labels and Near misses tabs
+   │   │   └── window.py        what the evoked analysis brings to the shared window
+   │   ├── spontaneous_analysis/
+   │   │   └── window.py        what the spontaneous-event analysis brings to the shared window
    │   ├── evoked_configurator/
    │   │   ├── window.py        the configurator window and its library bar
    │   │   ├── editors.py       the Recordings and Pulses tabs
@@ -113,6 +130,24 @@ The check lists of the configurator, the list of what a protocol measures,
 protocol files, the tables in this documentation and the measure reference
 page follow by themselves.
 
+Changing a built-in detector
+----------------------------
+
+The built-in detectors are written as code in ``ema/spontaneous/detector.py``
+(``PRESETS``). After changing them, run
+
+.. code-block:: bat
+
+   python -m ema.spontaneous.detector
+
+to write the files in ``ema/spontaneous/presets``. A test fails while the
+files and the code disagree. A new detector setting needs only an entry in
+``DetectorSettings`` (``ema/spontaneous/settings.py``) and its use in
+``detection.py`` or ``measures.py``; the configurator's form and the tables
+of this documentation follow. A new measure needs an entry in ``EVENT``,
+``RECORDING`` or ``SLICE`` (``measures.py``), its computation, and its full
+description in ``measure_details.py``; a test fails until it has one.
+
 Changing a built-in protocol
 ----------------------------
 
@@ -147,10 +182,11 @@ Building this documentation
 
    python docs/make_figures.py
    python docs/make_evoked_figures.py
+   python docs/make_spontaneous_figures.py
    python docs/make_screenshots.py
    python -m sphinx docs docs/_build/html
 
-The first three commands redraw the figures and screenshots from the sample
+The first four commands redraw the figures and screenshots from the sample
 recordings (pass their folder as an argument if it is not found);
 ``make_screenshots.py`` also writes the example Excel files in
 ``docs/examples``, which the page on the two files shows and offers for

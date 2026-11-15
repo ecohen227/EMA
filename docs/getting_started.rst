@@ -31,7 +31,7 @@ Start EMA
 Double-click the **EMA** icon on the Desktop, or double-click ``EMA.pyw`` in
 the EMA folder, or run ``python -m ema`` in a terminal.
 
-The start window lists the four packages. Click the one you need. The start
+The start window lists the five packages. Click the one you need. The start
 window comes back when you close the package.
 
 .. figure:: screenshots/launcher.png

@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ..labels import Label, LabelSet, default_labels
+from .labels import Label, LabelSet, default_labels
 
 NOT_A_LABEL = "Not a label"
 

@@ -31,6 +31,10 @@ from ema.evoked.metrics import KINETIC_KEYS, SPATIAL_KEYS
 from ema.evoked.template import LIKE
 from ema.evoked.workbook import PER_RECORDING, PER_SLICE
 from ema.evoked_analysis.window import AnalysisWindow
+from ema.spontaneous.workbook import PER_EVENT
+from ema.spontaneous.workbook import PER_SLICE as SPONTANEOUS_PER_SLICE
+from ema.spontaneous_analysis.window import SpontaneousAnalysisWindow
+from ema.spontaneous_configurator.window import SpontaneousConfiguratorWindow
 from ema.evoked_configurator.pulse_dialog import PlacePulsesDialog
 from ema.evoked_configurator.template_dialog import TemplateDialog
 from ema.evoked_configurator.window import ConfiguratorWindow
@@ -123,6 +127,8 @@ def main():
     save(window, "reviewed.png")
     configurator_screenshots(recordings, output)
     analysis_screenshots(output)
+    spontaneous_screenshots(recordings, output)
+    spontaneous_analysis_screenshots(recordings, output)
 
 
 def configurator_screenshots(recordings, output):
@@ -254,6 +260,80 @@ def analysis_screenshots(output):
     EXAMPLES.mkdir(exist_ok=True)
     for name in (PER_RECORDING, PER_SLICE):
         shutil.copyfile(output / "demo" / "Evoked 2P" / name, EXAMPLES / ("Example - " + name))
+        print("saved Example -", name)
+
+
+def spontaneous_screenshots(recordings, output):
+    """The Spontaneous Event Configurator on the sample unstimulated recording with two events planted in it."""
+    from make_spontaneous_figures import planted_example
+
+    root = output / "spontaneous"
+    folder = root / "Slice 1" / "input output"
+    center, electrode = planted_example(recordings, folder)
+    selections = Selections(root, RoiSettings())
+    selections.folders[selections.name_of(folder)] = FolderSelection(electrode.shape, center, RoiSettings().roi_radius_px,
+                                                                     electrode, reviewed=True)
+    selections.save(root / "roi_selections.json")
+    window = SpontaneousConfiguratorWindow(user_folder=output / "detectors")
+    window.resize(1450, 820)
+    window.use_example_folder(folder, root / "roi_selections.json")
+    window.worker.wait()
+    app.processEvents()
+    window.folder_label.setText("C:/Users/you/Recordings/…/Slice 1/input output")
+    window.form.sections["Spatial filter"].heading.click()
+    window.show()
+    save(window, "spontaneous_configurator.png")
+    window.saved = window.detector.to_dict()
+    window.close()
+
+
+SPONTANEOUS_FOLDERS = [  # folder, events per recording (two recordings), peak dF/F scale
+    ("Males/LKI WT M5820/CTRL 2HR/Slice 1/input output", (2, 1), 1.0),
+    ("Males/LKI WT M5820/IFN 2H/Slice 3/input output", (3, 2), 1.2),
+    ("Females/LKI HET F5819/CTRL 2HR/Slice 1/input output", (1, 1), 0.8),
+    ("Females/LKI HET F5819/IFNy 2HR/Slice 2/input output", (2, 2), 0.9),
+]
+
+
+def spontaneous_analysis_screenshots(recordings, output):
+    """The Spontaneous Event Analysis on four made-up slices: copies of the sample's unstimulated recording with planted
+    events (1 to 3 per recording, 2–5 % peak, σ 96–176 µm); the two Excel files are kept as examples."""
+    from make_spontaneous_figures import planted_example
+
+    root = output / "spontaneous_demo" / "recordings"
+    rng = np.random.default_rng(7)
+    center = electrode = None
+    for name, counts, scale in SPONTANEOUS_FOLDERS:
+        for n, count in enumerate(counts, start=1):
+            onsets = 150 + np.sort(rng.choice(np.arange(0, 1200, 200), count, replace=False)) + rng.integers(0, 60, count)
+            planted = [(int(t), int(rng.integers(15, 112)), int(rng.integers(60, 112)), scale * rng.uniform(0.02, 0.05),
+                        rng.uniform(6, 11)) for t in onsets]
+            center, electrode = planted_example(recordings, root / name, planted, f"no{n}.tif")
+    selections = Selections(root, RoiSettings())
+    for name, _, _ in SPONTANEOUS_FOLDERS:
+        selections.folders[name] = FolderSelection(electrode.shape, center, RoiSettings().roi_radius_px, electrode,
+                                                   reviewed=True)
+    selections.save(root.parent / "roi_selections.json")
+    window = SpontaneousAnalysisWindow(user_folder=output / "detectors", workers=4)
+    window.resize(1400, 760)
+    window.recordings_input.path.setText(str(root))
+    window.load_recordings_folder()
+    window.roi_input.path.setText(str(root.parent / "roi_selections.json"))
+    window.load_roi_file()
+    window.output.path.setText(str(output / "spontaneous_demo" / "Spontaneous v5"))
+    window.output_changed()
+    window.start()
+    window.worker.wait()
+    app.processEvents()
+    window.recordings_input.path.setText("C:/Users/you/Recordings")
+    window.roi_input.path.setText("C:/Users/you/EMA results/roi_selections.json")
+    window.output.path.setText("C:/Users/you/EMA results/Spontaneous v5")
+    window.show()
+    save(window, "spontaneous_analysis.png")
+    window.close()
+    EXAMPLES.mkdir(exist_ok=True)
+    for name in (PER_EVENT, SPONTANEOUS_PER_SLICE):
+        shutil.copyfile(output / "spontaneous_demo" / "Spontaneous v5" / name, EXAMPLES / ("Example - " + name))
         print("saved Example -", name)
 
 

@@ -289,7 +289,7 @@ def test_a_file_open_in_excel_is_reported(study, tmp_path, monkeypatch):
             raise PermissionError("in use")
         return real_replace(source, target)
 
-    monkeypatch.setattr("ema.evoked.workbook.os.replace", locked)
+    monkeypatch.setattr("ema.excel.os.replace", locked)
     with pytest.raises(TablesLocked, match="Close it in Excel"):
         write_workbooks(analysis)
     assert (tmp_path / "out" / PER_SLICE).is_file() and not (tmp_path / "out" / PER_RECORDING).exists()
@@ -324,9 +324,9 @@ def test_the_window_runs_an_analysis_and_writes_the_tables(app, study, tmp_path,
     window = AnalysisWindow(user_folder=tmp_path / "protocols")
     window.roi_input.path.setText(str(roi_file))
     window.load_roi_file()
-    window.protocol_box.addItem("small", str(protocol_file))
-    window.protocol_box.setCurrentIndex(window.protocol_box.count() - 1)
-    window.choose_protocol()
+    window.method_box.addItem("small", str(protocol_file))
+    window.method_box.setCurrentIndex(window.method_box.count() - 1)
+    window.choose_method()
     window.output.path.setText(str(tmp_path / "out"))
     window.output_changed()
     assert window.folders_table.rowCount() == 3
@@ -366,7 +366,7 @@ def test_a_near_miss_is_resolved_from_the_window(app, study, tmp_path):
     assert window.tabs.tabText(2) == "Near misses"
     assert window.folders_table.item(0, 3).text() == "CTRL"
     assert "Contrl" in window.analysis.labels.label("Treatment").values["CTRL"]
-    assert user_settings.remembered("evoked_labels")["labels"][2]["values"]["CTRL"][-1] == "Contrl"
+    assert user_settings.remembered("folder_labels")["labels"][2]["values"]["CTRL"][-1] == "Contrl"
     window.close()
 
 
@@ -382,9 +382,9 @@ def test_the_window_asks_before_keeping_folders_of_another_roi_file(app, study, 
     window = AnalysisWindow(user_folder=tmp_path / "protocols")
     window.roi_input.path.setText(str(roi_file))
     window.load_roi_file()
-    window.protocol_box.addItem("small", str(protocol_file))
-    window.protocol_box.setCurrentIndex(window.protocol_box.count() - 1)
-    window.choose_protocol()
+    window.method_box.addItem("small", str(protocol_file))
+    window.method_box.setCurrentIndex(window.method_box.count() - 1)
+    window.choose_method()
     window.output.path.setText(str(tmp_path / "out"))
     window.output_changed()
     asked = []

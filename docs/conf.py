@@ -94,6 +94,53 @@ def write_metric_tables(app):
     (folder / "spatial_settings.rst").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def write_spontaneous_tables(app):
+    """The detector's settings, group by group, and the reference entries of the spontaneous-event measures."""
+    from ema.spontaneous.detector import detector_v5
+    from ema.spontaneous.measure_details import EVENT_DETAILS, RECORDING_DETAILS, SLICE_DETAILS, SUMMARY
+    from ema.spontaneous.measures import EVENT, RECORDING, SLICE, STATISTICS
+    from ema.spontaneous.settings import GROUPS, DetectorSettings
+
+    folder = Path(app.srcdir) / "_generated"
+    folder.mkdir(exist_ok=True)
+    defaults = DetectorSettings()
+    for group in GROUPS:
+        lines = [".. list-table::", "   :header-rows: 1", "   :widths: 26 14 60", ""]
+        lines += ["   * - Setting", "     - Detector v5", "     - What it does"]
+        for f in fields(DetectorSettings):
+            if f.metadata["group"] != group:
+                continue
+            value = getattr(defaults, f.name)
+            if isinstance(value, bool):
+                value = "yes" if value else "no"
+            elif isinstance(value, list):
+                value = f"{value[0]} up to {value[1]}"
+            else:
+                value = f"{value:g} {f.metadata['unit']}".strip()
+            lines += [f"   * - {f.metadata['label']}", f"     - {value}", f"     - {f.metadata['help']}"]
+        (folder / f"spontaneous_settings_{group.lower().replace(' ', '_')}.rst").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    chosen = detector_v5()
+    for name, catalogue, details, per, picked in (
+        ("event", EVENT, EVENT_DETAILS, "per event", chosen.event_measures),
+        ("recording", RECORDING, RECORDING_DETAILS, "per recording", chosen.recording_measures),
+        ("slice", SLICE, SLICE_DETAILS, "per slice", chosen.slice_measures),
+    ):
+        lines, group = [], None
+        for measure in catalogue:
+            if measure.group != group:
+                group = measure.group
+                lines += [group, "~" * len(group), ""]
+            named = f"``{measure.key}`` ({per}" + ("; chosen in Detector v5)" if measure.key in picked else ")")
+            lines += _metric_entry(dict(details[measure.key], title=measure.key, unit=measure.unit, name=named,
+                                        definition=measure.explanation))
+        (folder / f"spontaneous_reference_{name}.rst").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    summary = dict(SUMMARY, title="Summaries of event measures", unit="the event measure's unit",
+                   name="``<event measure> <statistic>``, for example ``width median``; statistics: " + ", ".join(STATISTICS),
+                   definition="The median, mean, smallest or largest value of an event measure over the slice's events.")
+    (folder / "spontaneous_reference_summary.rst").write_text("\n".join(_metric_entry(summary)) + "\n", encoding="utf-8")
+
+
 EXAMPLES = Path(__file__).parent / "examples"
 
 
@@ -115,6 +162,22 @@ def write_example_tables(app):
     # the measure sheets from row 3 on: rows 1 and 2 hold the measure's name and how to paste it
     _write_table(folder / "example_prism_recording.rst", list(per_recording["P1 response"].iter_rows(min_row=3, values_only=True)), header=2)
     _write_table(folder / "example_prism_slice.rst", list(per_slice["P1 response mean 100-400"].iter_rows(min_row=3, values_only=True)), header=1)
+
+    per_event = load_workbook(EXAMPLES / "Example - Spontaneous per event.xlsx", read_only=True)
+    per_slice = load_workbook(EXAMPLES / "Example - Spontaneous per slice.xlsx", read_only=True)
+    rows = list(per_event["Events"].iter_rows(values_only=True))
+    wanted = ["Folder", "Recording", "Genotype", "Treatment", "Event", "onset (s)", "z (z)", "fitted peak (%)", "width (µm)",
+              "rise 10-90 (ms)", "half-decay (ms)"]
+    columns = [rows[0].index(name) for name in wanted]
+    table = [[row[i] for i in columns] for row in rows[:5]] + [["…"] + [""] * (len(wanted) - 1)]
+    _write_table(folder / "example_spontaneous_events.rst", table, header=1)
+    _write_table(folder / "example_spontaneous_width.rst", list(per_event["width"].iter_rows(min_row=3, values_only=True)), header=1)
+    rows = list(per_slice["Slices"].iter_rows(values_only=True))
+    wanted = ["Folder", "Genotype", "Treatment", "Recordings searched", "events", "rate (per min)", "sign-flipped rate (per min)",
+              "width median (µm)", "half-decay median (ms)"]
+    columns = [rows[0].index(name) for name in wanted]
+    _write_table(folder / "example_spontaneous_slices.rst", [[row[i] for i in columns] for row in rows], header=1)
+    _write_table(folder / "example_spontaneous_rate.rst", list(per_slice["rate"].iter_rows(min_row=3, values_only=True)), header=1)
 
 
 def _write_table(path, rows, header):
@@ -154,3 +217,4 @@ def setup(app):
     app.connect("builder-inited", write_settings_tables)
     app.connect("builder-inited", write_metric_tables)
     app.connect("builder-inited", write_example_tables)
+    app.connect("builder-inited", write_spontaneous_tables)

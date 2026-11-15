@@ -24,11 +24,13 @@ dev = ["pytest", "sphinx>=7", "furo"]
 ema = "ema.app:main"
 
 [tool.setuptools]
-packages = ["ema", "ema.roi_selection", "ema.evoked", "ema.evoked_analysis", "ema.evoked_configurator"]
+packages = ["ema", "ema.roi_selection", "ema.evoked", "ema.evoked_analysis", "ema.evoked_configurator", "ema.spontaneous",
+            "ema.spontaneous_configurator"]
 
 [tool.setuptools.package-data]
 ema = ["assets/*"]
 "ema.evoked" = ["presets/*.json"]
+"ema.spontaneous" = ["presets/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
