@@ -42,13 +42,16 @@ def peak_frame(stack, settings):
     return start + int(np.argmax(ndimage.uniform_filter1d(brightness, size=5)))
 
 
-def response_map(stack, settings):
-    """dF/F of every pixel at the peak of the response: brightness at the peak / F0 - 1."""
+def response_at(stack, frame, settings):
+    """dF/F of every pixel around one frame: the mean of a few frames there / F0 - 1."""
     f0 = np.maximum(baseline_image(stack, settings), 1.0)  # never divide by zero
-    peak = peak_frame(stack, settings)
-    first = max(peak - settings.peak_frames_before, 0)
-    at_peak = stack[first : peak + settings.peak_frames_after].mean(axis=0)
-    return at_peak / f0 - 1
+    first = max(frame - settings.peak_frames_before, 0)
+    return stack[first : frame + settings.peak_frames_after].mean(axis=0) / f0 - 1
+
+
+def response_map(stack, settings):
+    """dF/F of every pixel at the peak of the response."""
+    return response_at(stack, peak_frame(stack, settings), settings)
 
 
 def find_roi_center(response, settings):
@@ -140,8 +143,9 @@ class Detection:
     """What the automatic detection found in one recording folder."""
 
     files: list  # names of the recordings it used
-    baseline: np.ndarray  # their mean baseline image (F0)
-    response: np.ndarray  # their mean response map (dF/F)
+    baseline: np.ndarray  # baseline image (F0) of their mean recording
+    response: np.ndarray  # response map (dF/F) of their mean recording
+    peak_frame: int  # frame of the peak of the response
     center: tuple  # automatic ROI centre (x, y)
     peak_response: float  # smoothed dF/F at the centre
     electrode: np.ndarray  # automatic electrode mask
@@ -165,20 +169,42 @@ def detection_files(paths, settings):
     ]
 
 
-def detect_folder(folder, settings, load=load_stack):
-    """Find the ROI and the electrode of one recording folder."""
+def mean_recording(paths, load=load_stack):
+    """The frame-by-frame mean of several recordings: one movie that stands for all of them."""
+    stacks = [load(path) for path in paths]
+    if len(stacks) == 1:
+        return stacks[0]
+    if len({stack.shape for stack in stacks}) > 1:
+        names = ", ".join(path.name for path in paths)
+        raise ValueError(f"{names} do not have the same size, so they cannot be averaged.")
+    total = np.zeros(stacks[0].shape, np.float32)
+    for stack in stacks:
+        total += stack
+    return total / len(stacks)
+
+
+def detect(stack, settings, files=()):
+    """Find the ROI and the electrode in one recording, usually a mean recording."""
+    baseline = baseline_image(stack, settings)
+    peak = peak_frame(stack, settings)
+    response = response_at(stack, peak, settings)
+    center, peak_response = find_roi_center(response, settings)
+    electrode = find_electrode(baseline, center, settings)
+    return Detection(list(files), baseline, response, peak, center, peak_response, electrode)
+
+
+def folder_mean(folder, settings, load=load_stack):
+    """The recording the ROI of a folder is found on: the mean of its detection files.
+
+    Returns the mean recording and the names of the files it was made from.
+    """
     paths = detection_files(list_recordings(folder), settings)
     if not paths:
         raise ValueError("This folder has no stimulated recordings to find the ROI from.")
+    return mean_recording(paths, load), [path.name for path in paths]
 
-    baselines, responses = [], []
-    for path in paths:
-        stack = load(path)
-        baselines.append(baseline_image(stack, settings))
-        responses.append(response_map(stack, settings))
-    baseline = np.mean(baselines, axis=0)
-    response = np.mean(responses, axis=0)
 
-    center, peak_response = find_roi_center(response, settings)
-    electrode = find_electrode(baseline, center, settings)
-    return Detection([path.name for path in paths], baseline, response, center, peak_response, electrode)
+def detect_folder(folder, settings, load=load_stack):
+    """Find the ROI and the electrode of one recording folder."""
+    stack, files = folder_mean(folder, settings, load)
+    return detect(stack, settings, files)

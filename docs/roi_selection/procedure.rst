@@ -7,6 +7,11 @@ that has neither (an 11-pulse folder, for example) uses all its stimulated
 recordings: every file whose name does not start with ``no``, except the
 "red" movies.
 
+These recordings are first averaged, frame by frame, into one **mean
+recording**. Everything below is done on that one movie. In the window it is
+the first entry of the *Recording* list (*Mean of 200uA, 300uA*), so you can
+look at exactly what the detection looked at.
+
 Words in *italics* below are settings; :doc:`settings` describes each one.
 
 The automatic ROI
@@ -17,9 +22,7 @@ The ROI is a circle around **the pixel with the strongest response**.
 .. figure:: ../figures/procedure_roi.png
    :width: 100%
 
-   The five steps, on ``300uA.tif`` of the sample slice.
-
-For each recording that sets the ROI:
+   The five steps, on the sample slice.
 
 1. **Find the peak frame.** The mean brightness of the whole image is
    followed through the *response search window*. The frame where it is
@@ -30,11 +33,7 @@ For each recording that sets the ROI:
    default 2 before it and 8 from the peak on, about 50 ms in all.
 4. **Response map.** Image at the peak ÷ baseline image − 1. This is dF/F
    for every pixel.
-
-Then, for the folder:
-
-5. **Average, smooth, take the maximum.** The response maps of the
-   recordings are averaged. The mean map is blurred with a Gaussian
+5. **Smooth, take the maximum.** The response map is blurred with a Gaussian
    (*smoothing*, 2 pixels) so that one noisy pixel cannot win. The brightest
    pixel of the result is the centre of the ROI. The ROI is the circle of
    the *ROI radius* around it.
@@ -43,20 +42,6 @@ The value of the smoothed map at that pixel is the *response at the
 automatic ROI* shown in the status line. If it is below the *low-response
 warning* (5 %), the folder gets a ⚠: with so little response, the brightest
 pixel may just be noise.
-
-Compared with earlier versions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The metric study that preceded EMA 3 used the same idea: the maximum of the
-smoothed mean of the peak dF/F maps. EMA 3 takes fewer steps to get there.
-The study smoothed every frame of the movie in time and space before it
-looked for the peak; EMA 3 averages the raw frames at the peak and smooths
-once, at the end. On the two sample recordings the two methods agree to
-within one pixel, and the new one is about 20 times faster. That is a check
-on two recordings, not a validation on the whole study.
-
-The study used 300 and 400 µA; EMA 3 uses 200 and 300 µA by default. This is
-the setting *Recordings that set the ROI*.
 
 The automatic electrode mask
 ----------------------------
@@ -72,7 +57,7 @@ can leave them out.
    The five steps, on the sample slice. The yellow cross is the centre of
    the automatic ROI.
 
-1. **Baseline image.** The mean baseline image of the recordings that set the ROI.
+1. **Baseline image.** The baseline image of the mean recording.
 2. **Brightness of the surroundings.** For every pixel, the median
    brightness in a square around it (*size of the surroundings*, 31 pixels).
    The square is wider than the electrode, so the median is the brightness
@@ -111,4 +96,6 @@ Automatic detection is a starting point. Typical cases to look out for:
   lower the *darkness threshold*.
 * **The electrode comes from another side.** Set *electrode enters from*.
 
-You can always overrule the result by hand; see :doc:`walkthrough`.
+The example in the setup dialog shows at once what a changed setting does;
+see :doc:`settings`. And you can always overrule the result by hand; see
+:doc:`walkthrough`.

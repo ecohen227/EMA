@@ -21,7 +21,9 @@ Layout
    │       ├── detection.py     the automatic ROI and electrode (numpy only, no GUI)
    │       ├── selections.py    the ROI file
    │       ├── setup_dialog.py  recordings folder, settings, output folder
+   │       ├── preview.py       the live example in the setup dialog
    │       ├── plots.py         the image with ROI and electrode, and the trace
+   │       ├── strip.py         the strip of cards, one per recording
    │       └── window.py        the ROI Selection window
    ├── tests/                   run with: python -m pytest
    └── docs/                    this documentation
@@ -45,8 +47,8 @@ Adding a setting
 ----------------
 
 Add one entry to ``RoiSettings`` in ``ema/roi_selection/settings.py`` and
-use it in ``detection.py``. The setup dialog, the ROI file and the tables of
-this documentation pick it up by themselves. ROI files written before the
+use it in ``detection.py``. The setup dialog with its live example, the ROI
+file and the tables of this documentation pick it up by themselves. ROI files written before the
 setting existed still load: a missing setting takes its default.
 
 Adding a package to the start window
@@ -67,8 +69,7 @@ Building this documentation
    python -m sphinx docs docs/_build/html
 
 The first two commands redraw the figures and screenshots from the sample
-recordings of the EMA V3 handoff (pass another folder as an argument if they
-are elsewhere). They are only needed after a change to the detection or to
+recordings (pass their folder as an argument if it is not found). They are only needed after a change to the detection or to
 the windows; the pictures are stored in ``docs/figures`` and
 ``docs/screenshots``. The *Documentation* button of the start window opens
 ``docs/_build/html/index.html``.

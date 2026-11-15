@@ -26,7 +26,7 @@ from ema import user_settings
 from ema.launcher import Launcher
 from ema.roi_selection import Selections
 from ema.roi_selection.setup_dialog import SetupDialog
-from ema.roi_selection.window import VIEW_BASELINE, VIEW_MOVIE, RoiSelectionWindow
+from ema.roi_selection.window import VIEW_BASELINE, VIEW_RESPONSE, RoiSelectionWindow
 
 DOCS = Path(__file__).parent
 SCREENSHOTS = DOCS / "screenshots"
@@ -57,23 +57,34 @@ def main():
     save(launcher, "launcher.png")
 
     dialog = SetupDialog()
+    dialog.recordings.path.setText(str(recordings))
+    dialog.recordings.changed.emit()
+    dialog.preview.folder_box.setCurrentIndex(1)
     dialog.recordings.path.setText("C:/Users/you/Recordings")
     dialog.output.path.setText("C:/Users/you/EMA results")
+    dialog.filter.skip_with.setText("4ap, wash")
     dialog.show()
     save(dialog, "setup.png")
+    dialog.preview.view_box.setCurrentIndex(1)
+    dialog.form.inputs["electrode_threshold"].setValue(0.97)
+    dialog.show_example()
+    save(dialog, "setup_example.png")
 
     window = RoiSelectionWindow(Selections(recordings), output)
-    window.resize(1200, 660)
+    window.resize(1300, 740)
     window.show()
     window.detect_all()
     window.folder_list.setCurrentRow(1)
+    window.finish_strip()
     save(window, "window.png")
 
     x, y = window.selection.roi_center
     window.move_roi(x + 14, y - 12)
     window.drop_roi()
+    window.finish_strip()
     save(window, "move_roi.png")
     window.use_automatic_roi()
+    window.finish_strip()
 
     window.view_box.setCurrentText(VIEW_BASELINE)
     window.electrode_tool.setChecked(True)
@@ -89,13 +100,12 @@ def main():
     window.use_automatic_electrode()
     window.roi_tool.setChecked(True)
 
-    window.view_box.setCurrentText(VIEW_MOVIE)
-    window.slider.setValue(113)
-    window.recording_box.setCurrentIndex(1)
-    window.reason.setText("no stimulation: example of a flag")
+    window.view_box.setCurrentText(VIEW_RESPONSE)
+    window.toggle_flag("no6.tif")
+    window.reason.setText("example of a flag")
     window.flag_recording(True)
-    window.slider.setValue(113)
-    save(window, "flag_and_movie.png")
+    window.slider.setValue(window.peak + 40)
+    save(window, "flag_and_slider.png")
     window.accept_and_next()
     save(window, "reviewed.png")
 

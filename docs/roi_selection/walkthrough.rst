@@ -5,16 +5,32 @@ Step by step
 --------
 
 Choosing *ROI Selection* in the start window opens the setup dialog. It asks
-three things, from top to bottom.
+three things, from top to bottom, and shows an example on the right.
 
 .. figure:: ../screenshots/setup.png
-   :width: 560
+   :width: 100%
 
    The setup dialog.
 
 Recordings folder
    The folder that holds your recordings. It can be one slice, one animal or
    a whole study: every folder inside it that holds TIFF movies is listed.
+
+Only folders with / Skip folders with
+   To work on part of the recordings, type words that the path of a folder
+   must or must not contain, separated by commas. Upper and lower case do
+   not matter.
+
+   * *Only folders with* ``11p`` keeps the 11-pulse folders; ``input`` keeps
+     the input–output folders. With several words, one of them is enough.
+   * *Skip folders with* ``4ap, wash`` leaves out every folder with one of
+     these words anywhere in its path.
+
+   The line below the boxes says how many folders will be used, and the
+   example on the right only offers those. Folders that are left out are not
+   listed in the window and do not appear in the ROI file. To keep, say,
+   11-pulse and input–output selections apart, give each its own output
+   folder.
 
 Settings
    The variables of the automatic detection. The defaults suit the standard
@@ -25,6 +41,13 @@ Settings
 Output folder
    Where ``roi_selections.json`` is saved. It must be outside the recordings
    folder, because EMA never writes into the recordings.
+
+Example
+   What the settings find in one of your recording folders: the automatic
+   ROI (white circle), the electrode mask (cyan) and the trace of the ROI
+   with the timing windows. It follows every change you make to a setting.
+   Pick another folder in the list above the image, and switch between the
+   response map and the baseline image next to it.
 
 Press *Start*. EMA remembers both folders for next time.
 
@@ -52,25 +75,34 @@ Recording folders (left)
         - Low response: check that the ROI is in a sensible place.
 
 Recording (top)
-   The drop-down list holds every recording of the open folder. The image
-   and the trace show the recording chosen here. The ROI and the electrode
-   mask belong to the folder, so they stay the same for all its recordings.
+   What the image and the trace show. A folder opens on its **mean
+   recording** (*Mean of 200uA, 300uA*): the average of the recordings that
+   set the ROI. The automatic ROI and electrode were found on it, so it is
+   the place to check them. Below it in the list are the recordings
+   themselves. The ROI and the electrode mask belong to the folder, so they
+   stay the same whichever recording is on show.
 
 Show (top)
    What the image shows:
 
-   * *Response of this recording*: the response map (dF/F at the peak) of
-     the chosen recording.
-   * *Mean response (used for the automatic ROI)*: the mean response map of
-     the recordings that set the ROI.
-   * *Baseline image*: the resting brightness, where the electrode is easiest to see.
-   * *Movie*: the frames themselves, with a slider. A red line in the trace
-     marks the frame on show.
+   * *Response (dF/F)*: the change in brightness relative to the baseline.
+   * *Brightness*: the frames as they were recorded.
+   * *Baseline image*: the resting brightness, where the electrode is
+     easiest to see.
+
+The slider (under the image)
+   The frame on show. It starts at the peak of the response, and a red line
+   in the trace marks it. Move it to watch the response rise and fade. The
+   baseline image is an average over the baseline window, so the slider
+   rests while it is on show.
 
 Trace (right)
    The mean brightness inside the ROI as dF/F in percent, relative to the
    baseline window (grey). The orange band is the window in which the peak
-   is looked for.
+   is looked for; the green band marks the frames averaged at the peak.
+
+The strip (under the plots)
+   Every recording of the folder at a glance; see step 5.
 
 Status line (bottom)
    Where the ROI is, whether it and the electrode are automatic or manual,
@@ -81,8 +113,9 @@ Status line (bottom)
 
 The ROI starts at the place of the strongest response (see :doc:`procedure`).
 With *Move the ROI* selected, drag the circle, or click anywhere on the
-image to centre it there. The trace follows while you drag. The ROI moves on
-whole pixels and its centre cannot leave the image.
+image to centre it there. The trace follows while you drag, and the strip
+follows when you let go. The ROI moves on whole pixels and its centre cannot
+leave the image.
 
 *Automatic ROI* puts the circle back where it was found.
 
@@ -122,21 +155,41 @@ The outline closes itself when you release the button.
 to draw the mask from scratch. *Automatic electrode* puts back the mask that
 was found automatically.
 
-5. Flag recordings
-------------------
+5. Review and flag the recordings
+---------------------------------
 
-Tick *Flag this recording* for a recording that fails your criteria, and
-type a reason if you like. Flagged recordings get a ⚑ in the drop-down list,
-and their folder gets one in the folder list. *Flag all in this folder*
-flags every recording of the folder with the reason typed in the box.
+The strip under the plots has one card per recording, after a first card
+for the mean recording. Each card shows
 
-A flag removes nothing. It is written to the ROI file, so that later
-analysis can leave flagged recordings out.
+* the response map at the peak, with the ROI on it,
+* the trace of the ROI,
+* the peak of that trace in percent.
 
-.. figure:: ../screenshots/flag_and_movie.png
+All cards share one colour scale and one trace scale. A weak response looks
+dim and flat next to a strong one, and an unstimulated recording looks
+empty, so a recording that does not fit stands out without opening it.
+
+* **Click** a card to show that recording in the plots above.
+* **Right-click** a card to flag it, or to remove its flag. The recording
+  is shown above and the cursor jumps to the reason box, so a reason can be
+  typed straight away.
+
+*Flag this recording* and the reason box next to it do the same for the
+recording on show. *Flag all in this folder…* flags every recording of the
+folder and asks for one reason for all of them.
+
+Flagged recordings get a red frame in the strip and a ⚑ in the *Recording*
+list, and their folder gets a ⚑ in the folder list. A flag removes nothing.
+It is written to the ROI file, so that later analysis can leave flagged
+recordings out. The mean recording cannot be flagged.
+
+.. figure:: ../screenshots/flag_and_slider.png
    :width: 100%
 
-   A flagged recording, shown as a movie.
+   A flagged recording. The slider has been moved past the peak.
+
+The cards are filled one after another while the recordings are read, so
+the window can be used straight away.
 
 6. Accept and go on
 -------------------
@@ -151,15 +204,22 @@ Other things you can do
 -----------------------
 
 Detect all folders
-   Finds the ROI and electrode of every folder that has none yet, with a
-   progress bar. Useful before a break: afterwards the ⚠ marks show which
+   Finds the ROI and electrode of every folder that has not been detected
+   with the current settings, with a progress bar. Useful before a break: afterwards the ⚠ marks show which
    folders need attention first.
 
 Settings…
-   Opens the settings again. After a change, folders you adjusted by hand
-   keep their ROI and electrode (only the radius follows the new setting).
-   All other folders are detected again with the new settings and lose
-   their ✓, because what you reviewed has changed.
+   Opens the setup dialog again, with the open folder as the example.
+
+   After a change to a **setting**, every folder has to be reviewed again:
+   all ✓ marks are removed, and EMA asks before it does that. What you set
+   by hand is kept, a moved ROI or a redrawn electrode; only the radius
+   follows the new setting. Everything that was found automatically is found
+   again with the new settings.
+
+   A change to the **folder filter** does not undo any review. Folders that
+   no longer pass the filter are removed from the ROI file, and EMA asks
+   before it does that too.
 
 Export table…
    Saves one row per folder as a CSV file for Excel: ROI position, radius,
@@ -174,4 +234,4 @@ Continue later
 Recordings on OneDrive
    Reading a file that is stored online only downloads it. EMA asks once
    before it does that. If you answer *No*, online-only recordings are
-   skipped.
+   skipped and their cards say so.

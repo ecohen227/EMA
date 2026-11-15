@@ -2,9 +2,8 @@
 
     python docs/make_figures.py [folder with the sample recordings]
 
-The folder must hold `2P_input_output/300uA.tif` and `2P_input_output/no6.tif`
-(the sample data of the EMA V3 handoff). The figures are saved in
-docs/figures. Every figure calls the same functions as the program, so the
+The folder must hold `2P_input_output/300uA.tif` and `2P_input_output/no6.tif`.
+The figures are saved in docs/figures. Every figure calls the same functions as the program, so the
 pictures show what the program really does.
 """
 

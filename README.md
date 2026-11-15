@@ -10,8 +10,6 @@ one start window:
 | Evoked Analysis Configurator | Sets the windows, fits and comparisons of the evoked analysis | Planned |
 | Spontaneous Event Analysis | Finds and measures spontaneous events in unstimulated recordings | Planned |
 
-EMA 2.4 (`EMA_V2` in the handoff) stays the program for the evoked analysis until that package is built here.
-
 ## Install (once per computer)
 
 1. Install **Python 3.9 or newer** from [python.org](https://www.python.org/downloads/). On Windows, tick
@@ -40,10 +38,12 @@ python -m ema
 
 1. Choose **ROI Selection** in the start window.
 2. Choose the **recordings folder**, check the **settings**, choose an **output folder** (outside the recordings).
+   The example on the right shows what the settings find, and follows every change.
 3. For each folder in the list: look at the ROI (white circle) and the electrode mask (cyan). Drag the ROI, or
-   redraw the electrode with *Edit the electrode* (left button adds, right button removes). Tick *Flag this
-   recording* for recordings that fail your criteria.
-4. Press **Accept and next**.
+   redraw the electrode with *Edit the electrode* (left button adds, right button removes).
+4. Look over the strip of recordings under the plots. Click one to show it; right-click one that fails your
+   criteria to flag it.
+5. Press **Accept and next**.
 
 Everything is saved as you go in `roi_selections.json` in the output folder. The recordings are only read, never
 changed.

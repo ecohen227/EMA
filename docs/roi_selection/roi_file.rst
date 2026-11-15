@@ -20,6 +20,7 @@ What is in it
      "ema_version": "3.0.0a1",
      "saved": "2026-11-14 19:42:10",
      "recordings_folder": "C:/Users/you/Recordings",
+     "folder_filter": {"only_with": ["input"], "skip_with": ["4ap", "wash"]},
      "settings": {
        "roi_radius_px": 20,
        "detection_files": ["200uA", "300uA"],
@@ -53,12 +54,17 @@ What is in it
      - Meaning
    * - ``recordings_folder``
      - The recordings folder the selections were made in.
+   * - ``folder_filter``
+     - The words that chose the folders: a folder is used when its path
+       contains one of ``only_with`` (or ``only_with`` is empty) and none of
+       ``skip_with``.
    * - ``settings``
      - The settings in use. See :doc:`settings` for the names.
    * - ``folders``
      - One entry per recording folder. The name is the path of the folder
        inside the recordings folder, with ``/`` between the parts. Folders
-       that were never opened or detected have no entry.
+       that were never opened or detected, or that the folder filter leaves
+       out, have no entry.
    * - ``image_shape``
      - Rows and columns of the recordings.
    * - ``roi``
@@ -66,14 +72,17 @@ What is in it
        ``automatic``, or ``manual`` once the ROI was moved by hand.
    * - ``automatic_roi``
      - Where the automatic detection put the ROI, the response there, and
-       the recordings it was found from. Kept even when the ROI is moved.
+       the recordings whose mean it was found on. Kept even when the ROI is
+       moved. It is ``null`` for a folder that was adjusted by hand and is
+       waiting to be detected again after a settings change.
    * - ``electrode``
      - The electrode mask. ``source`` is ``automatic`` or ``manual``,
        ``pixels`` is its area, ``rows`` lists its pixels (see below).
    * - ``flagged_files``
      - The flagged recordings, each with its reason (which may be empty).
    * - ``reviewed``
-     - ``true`` once *Accept and next* was pressed on the folder.
+     - ``true`` once *Accept and next* was pressed on the folder. It goes
+       back to ``false`` for every folder when a setting is changed.
 
 Positions
 ---------
@@ -109,6 +118,6 @@ Reading the file from Python
 ``selection.roi_mask() & ~selection.electrode_mask`` gives the ROI without
 the pixels hidden by the electrode. Whether to leave those pixels out is a
 choice of the analysis, not of ROI Selection: the trace shown in the ROI
-Selection window uses the whole circle, as every earlier EMA version did.
+Selection window uses the whole circle.
 
 The classes are described in :doc:`../reference`.

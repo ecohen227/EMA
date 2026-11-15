@@ -47,8 +47,8 @@ def find_recording_folders(root):
 def load_stack(path):
     """Read a recording as an array (frames, rows, columns).
 
-    The first frame of the TIFF is dropped, as in every earlier EMA version,
-    so frame 0 here is the second frame of the file.
+    The first frame of the TIFF is dropped, so frame 0 here is the second
+    frame of the file.
     """
     try:
         stack = tifffile.imread(path)

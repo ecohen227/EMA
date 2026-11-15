@@ -58,15 +58,16 @@ class ImageView(FigureCanvasQTAgg):
 
     With the MOVE_ROI tool, clicking or dragging moves the ROI. With the
     EDIT_ELECTRODE tool, dragging draws an outline: the left mouse button adds
-    the outlined area to the mask, the right button removes it.
+    the outlined area to the mask, the right button removes it. With the tool
+    set to None the image is only looked at.
     """
 
     roi_moved = pyqtSignal(int, int)  # new centre, while dragging
     roi_dropped = pyqtSignal()
     electrode_outlined = pyqtSignal(object, bool)  # outlined area (mask), True to add / False to remove
 
-    def __init__(self):
-        super().__init__(Figure(figsize=(5, 4.4), layout="constrained"))
+    def __init__(self, figsize=(5, 4.4)):
+        super().__init__(Figure(figsize=figsize, layout="constrained"))
         self.tool = MOVE_ROI
         self.axes = self.figure.add_subplot()
         self.axes.axis("off")
@@ -189,21 +190,25 @@ class ImageView(FigureCanvasQTAgg):
 class TraceView(FigureCanvasQTAgg):
     """dF/F of the ROI over time, with the baseline and search windows shaded."""
 
-    def __init__(self):
-        super().__init__(Figure(figsize=(6, 4.4), layout="constrained"))
+    def __init__(self, figsize=(6, 4.4)):
+        super().__init__(Figure(figsize=figsize, layout="constrained"))
         self.axes = self.figure.add_subplot()
         self.line = None
         self.frame_marker = None
         self.blitter = Blitter(self)
 
-    def show_trace(self, trace, settings, title=""):
+    def show_trace(self, trace, settings, title="", peak=None):
+        """Draw a trace with the windows of the settings. `peak` is the peak frame, if it is known."""
         self.axes.clear()
         # The curve is drawn before the shaded windows: drawn after them, matplotlib keeps the old height of the plot.
         (self.line,) = self.axes.plot(trace, color="#1f4e79", linewidth=1.2)
         self.axes.axvspan(*settings.baseline_frames, color="0.85", label="Baseline window")
         self.axes.axvspan(*settings.search_frames, color="#fde9c9", label="Response search window")
+        if peak is not None:
+            first, last = peak - settings.peak_frames_before, peak + settings.peak_frames_after
+            self.axes.axvspan(first, last, color="#2a9d8f", label="Frames averaged at the peak")
         self.frame_marker = self.axes.axvline(0, color="red", linestyle="--", linewidth=1, visible=False)
-        self.axes.set(xlabel="Frame", ylabel="Brightness change in the ROI, dF/F (%)", title=title)
+        self.axes.set(xlabel="Frame", ylabel="dF/F in the ROI (%)", title=title)
         self.axes.set_xlim(0, len(trace))
         self.axes.legend(loc="upper right", fontsize="small", frameon=False)
         self.blitter.set_artists(self.line, self.frame_marker)

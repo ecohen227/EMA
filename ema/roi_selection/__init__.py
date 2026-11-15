@@ -9,7 +9,17 @@ To read the selections from another package or a script::
         print(name, selection.roi_center, selection.roi_radius_px)
 """
 
-from .detection import Detection, detect_folder, find_electrode, find_roi_center, response_map, roi_mask, roi_trace
+from .detection import (
+    Detection,
+    detect,
+    detect_folder,
+    find_electrode,
+    find_roi_center,
+    mean_recording,
+    response_map,
+    roi_mask,
+    roi_trace,
+)
 from .selections import FILE_NAME, FolderSelection, Selections
 from .settings import RoiSettings
 
@@ -19,9 +29,11 @@ __all__ = [
     "FolderSelection",
     "RoiSettings",
     "Selections",
+    "detect",
     "detect_folder",
     "find_electrode",
     "find_roi_center",
+    "mean_recording",
     "response_map",
     "roi_mask",
     "roi_trace",

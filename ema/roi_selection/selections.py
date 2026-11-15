@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import __version__
+from ..recordings import find_recording_folders
 from .detection import roi_mask
 from .settings import RoiSettings
 
@@ -42,15 +43,29 @@ class FolderSelection:
 
     @classmethod
     def from_detection(cls, detection, settings):
-        return cls(
+        selection = cls(
             image_shape=detection.response.shape,
             roi_center=detection.center,
             roi_radius_px=settings.roi_radius_px,
-            electrode_mask=detection.electrode.copy(),
-            automatic_roi_center=detection.center,
-            peak_response_percent=round(detection.peak_response * 100, 2),
-            detection_files=list(detection.files),
+            electrode_mask=detection.electrode,
         )
+        selection.use_detection(detection)
+        return selection
+
+    def use_detection(self, detection):
+        """Take over an automatic result. A ROI or electrode that was set by hand stays as it is."""
+        self.automatic_roi_center = detection.center
+        self.peak_response_percent = round(detection.peak_response * 100, 2)
+        self.detection_files = list(detection.files)
+        if self.roi_source == AUTOMATIC:
+            self.roi_center = detection.center
+        if self.electrode_source == AUTOMATIC:
+            self.electrode_mask = detection.electrode.copy()
+
+    @property
+    def needs_detection(self):
+        """True after a settings change, until the folder has been detected with the new settings."""
+        return self.automatic_roi_center is None
 
     def roi_mask(self):
         """True for the pixels inside the ROI."""
@@ -65,6 +80,14 @@ class FolderSelection:
         return MANUAL in (self.roi_source, self.electrode_source)
 
     def to_dict(self):
+        automatic = None
+        if not self.needs_detection:
+            automatic = {
+                "x": self.automatic_roi_center[0],
+                "y": self.automatic_roi_center[1],
+                "peak_response_percent": self.peak_response_percent,
+                "files": self.detection_files,
+            }
         return {
             "image_shape": list(self.image_shape),
             "roi": {
@@ -73,12 +96,7 @@ class FolderSelection:
                 "radius_px": self.roi_radius_px,
                 "source": self.roi_source,
             },
-            "automatic_roi": {
-                "x": self.automatic_roi_center[0],
-                "y": self.automatic_roi_center[1],
-                "peak_response_percent": self.peak_response_percent,
-                "files": self.detection_files,
-            },
+            "automatic_roi": automatic,
             "electrode": {
                 "source": self.electrode_source,
                 "pixels": int(self.electrode_mask.sum()),
@@ -92,27 +110,43 @@ class FolderSelection:
     def from_dict(cls, saved):
         shape = tuple(saved["image_shape"])
         roi, automatic, electrode = saved["roi"], saved["automatic_roi"], saved["electrode"]
-        return cls(
+        selection = cls(
             image_shape=shape,
             roi_center=(roi["x"], roi["y"]),
             roi_radius_px=roi["radius_px"],
             roi_source=roi["source"],
             electrode_mask=text_to_mask(electrode["rows"], shape),
             electrode_source=electrode["source"],
-            automatic_roi_center=(automatic["x"], automatic["y"]),
-            peak_response_percent=automatic["peak_response_percent"],
-            detection_files=automatic["files"],
             flagged_files=saved["flagged_files"],
             reviewed=saved["reviewed"],
         )
+        if automatic is not None:
+            selection.automatic_roi_center = (automatic["x"], automatic["y"])
+            selection.peak_response_percent = automatic["peak_response_percent"]
+            selection.detection_files = automatic["files"]
+        return selection
+
+
+def folder_matches(name, only_with, skip_with):
+    """True if a folder name passes a folder filter.
+
+    The name must contain at least one of the words in `only_with` (if there
+    are any) and none of the words in `skip_with`. Upper and lower case count
+    as the same.
+    """
+    name = name.lower()
+    wanted = not only_with or any(word.lower() in name for word in only_with)
+    return wanted and not any(word.lower() in name for word in skip_with)
 
 
 class Selections:
-    """Every folder's selection, with the settings they were made with."""
+    """Every folder's selection, with the settings and the folder filter they were made with."""
 
     def __init__(self, recordings_folder, settings=None):
         self.recordings_folder = Path(recordings_folder)
         self.settings = settings or RoiSettings()
+        self.only_folders_with = []  # folder filter: words a folder's path must contain (any of them)
+        self.skip_folders_with = []  # folder filter: words a folder's path must not contain
         self.folders = {}  # folder name -> FolderSelection
 
     def name_of(self, folder):
@@ -123,19 +157,34 @@ class Selections:
         """The selection of a recording folder, or None if it has none yet."""
         return self.folders.get(self.name_of(folder))
 
-    def change_settings(self, settings):
-        """Use new settings.
+    def recording_folders(self):
+        """The recording folders under the recordings folder that pass the folder filter."""
+        return [
+            folder
+            for folder in find_recording_folders(self.recordings_folder)
+            if folder_matches(self.name_of(folder), self.only_folders_with, self.skip_folders_with)
+        ]
 
-        Folders that were adjusted by hand keep their ROI and electrode; only
-        their radius follows the new settings. All other folders are forgotten,
-        so they are detected again with the new settings.
+    def change_folder_filter(self, only_with, skip_with):
+        """Use a new folder filter. Saved folders that do not pass it are forgotten."""
+        self.only_folders_with, self.skip_folders_with = list(only_with), list(skip_with)
+        self.folders = {name: s for name, s in self.folders.items() if folder_matches(name, only_with, skip_with)}
+
+    def change_settings(self, settings):
+        """Use new settings. Every folder then has to be reviewed again.
+
+        What was set by hand is kept: a moved ROI, a redrawn electrode. What
+        was found automatically is found again with the new settings, the
+        next time the folder is opened or detected.
         """
         if settings == self.settings:
             return
         self.settings = settings
         self.folders = {name: s for name, s in self.folders.items() if s.is_manual}
         for selection in self.folders.values():
+            selection.reviewed = False
             selection.roi_radius_px = settings.roi_radius_px
+            selection.automatic_roi_center = selection.peak_response_percent = None
 
     def save(self, path):
         """Write everything to a JSON file."""
@@ -145,6 +194,7 @@ class Selections:
             "ema_version": __version__,
             "saved": datetime.now().isoformat(sep=" ", timespec="seconds"),
             "recordings_folder": self.recordings_folder.as_posix(),
+            "folder_filter": {"only_with": self.only_folders_with, "skip_with": self.skip_folders_with},
             "settings": self.settings.to_dict(),
             "folders": {name: self.folders[name].to_dict() for name in sorted(self.folders)},
         }
@@ -162,6 +212,9 @@ class Selections:
         if saved["format_version"] > FORMAT_VERSION:
             raise ValueError(f"{Path(path).name} was written by a newer version of EMA ({saved['ema_version']}).")
         selections = cls(saved["recordings_folder"], RoiSettings.from_dict(saved["settings"]))
+        folder_filter = saved.get("folder_filter", {})
+        selections.only_folders_with = folder_filter.get("only_with", [])
+        selections.skip_folders_with = folder_filter.get("skip_with", [])
         for name, folder in saved["folders"].items():
             selections.folders[name] = FolderSelection.from_dict(folder)
         return selections

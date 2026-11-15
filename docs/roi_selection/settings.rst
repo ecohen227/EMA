@@ -3,7 +3,30 @@ Settings
 
 The settings are chosen in the setup dialog and can be changed later with
 *Settings…*. They are saved in the ROI file together with the selections, so
-it is always known which settings a selection was made with.
+it is always known which settings a selection was made with. For the same
+reason, changing a setting later means every folder has to be reviewed
+again.
+
+Trying a setting
+----------------
+
+The right half of the setup dialog is a live example. It runs the detection
+on one of your own recording folders and redraws a moment after every change
+to a setting: the ROI, the electrode mask, the trace of the ROI with the
+timing windows, and one line with the numbers.
+
+.. figure:: ../screenshots/setup_example.png
+   :width: 100%
+
+   Trying a higher darkness threshold. The example shows the baseline image,
+   where the electrode is easiest to see: the mask has grown along the image
+   edge.
+
+* The list above the image chooses the example folder. Try a folder with a
+  strong response and one with a weak response.
+* The second list switches between the response map (for the ROI settings)
+  and the baseline image (for the electrode settings).
+* Nothing is saved until you press *Start* or *Apply*.
 
 All figures on this page are drawn from the sample slice by the program's
 own functions. Distances are in pixels; with the 4× objective one pixel is
@@ -19,8 +42,8 @@ ROI
    :width: 90%
 
    **ROI radius.** A larger ROI averages over more tissue, including tissue
-   that responds less, so its trace is lower. The default (white, 20 pixels)
-   is the radius of all earlier EMA versions.
+   that responds less, so its trace is lower. The default is 20 pixels
+   (white).
 
 .. figure:: ../figures/setting_smoothing.png
    :width: 90%
@@ -37,9 +60,10 @@ ROI
    there is small. Folders below the warning level are marked ⚠.
 
 **Recordings that set the ROI** takes file names without ``.tif``, separated
-by commas. If a folder has only some of them, those are used. If it has
-none, all its stimulated recordings are used, except files with one of the
-words under **Never use files named** in their name.
+by commas. They are averaged into the mean recording on which the ROI and
+the electrode are found. If a folder has only some of them, those are used.
+If it has none, all its stimulated recordings are used, except files with
+one of the words under **Never use files named** in their name.
 
 Timing
 ------
@@ -62,6 +86,9 @@ Electrode
 ---------
 
 .. include:: ../_generated/settings_electrode.rst
+
+While *Find the electrode automatically* is switched off, the other
+electrode settings are greyed out: they have nothing to act on.
 
 .. figure:: ../figures/setting_electrode_shape.png
    :width: 70%

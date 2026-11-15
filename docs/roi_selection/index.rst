@@ -13,7 +13,8 @@ read.
 
    The ROI Selection window. Left: the recording folders. Middle: the
    response map with the ROI (white circle) and the electrode mask (cyan).
-   Right: the trace of the ROI.
+   Right: the trace of the ROI. Below: every recording of the folder at a
+   glance.
 
 In short
 --------
@@ -21,7 +22,8 @@ In short
 1. Choose *ROI Selection* in the start window.
 2. Choose the recordings folder, check the settings, choose an output folder.
 3. Go through the folders. For each one, look at the ROI and the electrode.
-   Drag the ROI or redraw the electrode if needed. Flag bad recordings.
+   Drag the ROI or redraw the electrode if needed. Look over the strip of
+   recordings and right-click the ones that fail your criteria to flag them.
 4. Press *Accept and next*.
 
 Everything is saved as you go, in ``roi_selections.json`` in the output

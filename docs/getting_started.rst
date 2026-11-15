@@ -62,6 +62,6 @@ save its own files inside the recordings folder.
 Frame numbers
 -------------
 
-EMA drops the first frame of every TIFF, as every earlier version did. So
-*frame 0* in EMA is the second frame of the file. All frame numbers in the
-settings and in the plots are counted this way.
+EMA drops the first frame of every TIFF. So *frame 0* in EMA is the second
+frame of the file. All frame numbers in the settings and in the plots are
+counted this way.

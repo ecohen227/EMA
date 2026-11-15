@@ -27,8 +27,8 @@ class RoiSettings:
         ["200uA", "300uA"],
         "ROI",
         "Recordings that set the ROI",
-        "The automatic ROI is found on the mean response of these recordings (file names without "
-        ".tif, separated by commas). A folder that has none of them uses every stimulated recording.",
+        "The automatic ROI and electrode are found on the mean of these recordings (file names "
+        "without .tif, separated by commas). A folder that has none of them uses every stimulated recording.",
         "names",
     )
     skip_words: list = setting(

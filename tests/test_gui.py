@@ -5,14 +5,16 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from matplotlib.backend_bases import MouseEvent
-from PyQt5.QtWidgets import QApplication, QMessageBox, QPushButton
+from PyQt5.QtCore import Qt
+from PyQt5.QtTest import QTest
+from PyQt5.QtWidgets import QApplication, QInputDialog, QMessageBox, QPushButton
 
 from ema import user_settings
 from ema.launcher import Launcher
 from ema.roi_selection import FILE_NAME, Selections
 from ema.roi_selection.selections import AUTOMATIC, MANUAL
 from ema.roi_selection.setup_dialog import SetupDialog
-from ema.roi_selection.window import VIEW_BASELINE, VIEW_MEAN, VIEW_MOVIE, RoiSelectionWindow
+from ema.roi_selection.window import MEAN, VIEW_BASELINE, VIEW_MOVIE, VIEW_RESPONSE, RoiSelectionWindow
 
 from conftest import CENTER
 
@@ -32,6 +34,7 @@ def window(app, recordings, tmp_path):
     window = RoiSelectionWindow(Selections(recordings), tmp_path)
     window.show()
     window.folder_list.setCurrentRow(1)  # the "input output" folder
+    window.finish_strip()
     window.image.draw()
     yield window
     window.close()
@@ -54,25 +57,55 @@ def saved(window):
     return Selections.load(window.output_folder / FILE_NAME)
 
 
+# ---------------------------------------------------------------------------
+# Opening folders and recordings
+# ---------------------------------------------------------------------------
+
+
 def test_opening_a_folder_detects_and_saves_it(window, io_folder):
     selection = window.selection
-    assert window.recording_box.currentText() == "200uA.tif"
     assert selection.roi_source == AUTOMATIC and selection.electrode_mask.any()
     assert np.hypot(selection.roi_center[0] - CENTER[0], selection.roi_center[1] - CENTER[1]) <= 1.5
     assert saved(window).of(io_folder).roi_center == selection.roi_center
 
 
+def test_a_folder_opens_on_its_mean_recording(window):
+    assert window.recording == MEAN
+    assert window.recording_box.currentText() == "Mean of 200uA, 300uA"
+    assert not window.flag_box.isEnabled() and not window.reason.isEnabled()  # a mean cannot be flagged
+
+    window.choose_recording("100uA.tif")
+    assert window.recording == "100uA.tif" and window.flag_box.isEnabled()
+    assert window.trace.axes.get_title() == "100uA.tif"
+
+
 def test_trace_plot_is_rescaled_for_each_recording(window):
     tall = window.trace.axes.get_ylim()[1]
-    window.recording_box.setCurrentIndex(3)  # no1.tif: no response
+    window.choose_recording("no1.tif")
     assert window.trace.axes.get_ylim()[1] < tall / 3
 
 
-def test_every_view_can_be_shown(window):
-    for view in (VIEW_MEAN, VIEW_BASELINE, VIEW_MOVIE):
-        window.view_box.setCurrentText(view)
-    window.slider.setValue(120)
-    assert window.movie_row.isVisible() and "120" in window.frame_label.text()
+def test_slider_works_in_every_view(window):
+    assert window.slider.value() == window.peak and "the peak" in window.frame_label.text()
+    at_peak = window.image.image.get_array().copy()
+
+    window.slider.setValue(20)  # long before the stimulation: no response yet
+    assert window.view_box.currentText() == VIEW_RESPONSE
+    assert window.image.image.get_array().max() < at_peak.max() / 3
+    assert window.trace.frame_marker.get_xdata()[0] == 20 and "Frame 20" in window.frame_label.text()
+
+    window.view_box.setCurrentText(VIEW_MOVIE)
+    assert window.slider.isVisible() and window.slider.isEnabled()
+    assert np.array_equal(window.image.image.get_array(), window.stack[20])
+
+    window.view_box.setCurrentText(VIEW_BASELINE)
+    assert window.slider.isVisible() and not window.slider.isEnabled()  # the baseline image has no time
+    assert "Mean of frames 10 to 94" in window.frame_label.text()
+
+
+# ---------------------------------------------------------------------------
+# ROI and electrode
+# ---------------------------------------------------------------------------
 
 
 def test_dragging_moves_the_roi(window, io_folder):
@@ -111,19 +144,74 @@ def test_redrawing_the_electrode(window, io_folder):
     assert np.array_equal(window.selection.electrode_mask, before) and window.selection.electrode_source == AUTOMATIC
 
 
-def test_flags(window, io_folder):
+# ---------------------------------------------------------------------------
+# The strip of all recordings, and flags
+# ---------------------------------------------------------------------------
+
+
+def test_strip_shows_every_recording(window):
+    cards = window.strip.cards
+    assert list(cards) == [MEAN, "100uA.tif", "200uA.tif", "300uA.tif", "no1.tif"]
+    assert all(card.picture is not None for card in cards.values())
+    peaks = {name: float(card.caption.rstrip(" %")) for name, card in cards.items()}
+    assert peaks["300uA.tif"] > peaks["200uA.tif"] > peaks["100uA.tif"] > 5 > peaks["no1.tif"]
+    assert cards[MEAN].selected and not cards["100uA.tif"].selected
+
+
+def test_strip_follows_the_roi(window):
+    before = window.strip.cards["300uA.tif"].trace.max()
+    drag(window.image, [(8, 8)])  # far from the response
+    window.finish_strip()
+    assert window.strip.roi == ((8, 8), 20)
+    assert window.strip.cards["300uA.tif"].trace.max() < before / 2
+
+
+def test_clicking_a_card_shows_its_recording(window):
+    QTest.mouseClick(window.strip.cards["300uA.tif"], Qt.LeftButton)
+    assert window.recording == "300uA.tif" and window.recording_box.currentText() == "300uA.tif"
+    assert window.strip.cards["300uA.tif"].selected and not window.strip.cards[MEAN].selected
+
+
+def test_right_clicking_a_card_flags_it(window, io_folder):
+    card = window.strip.cards["100uA.tif"]
+    QTest.mouseClick(card, Qt.RightButton)
+    assert card.flagged and window.recording == "100uA.tif" and window.flag_box.isChecked()
+    assert saved(window).of(io_folder).flagged_files == {"100uA.tif": ""}
+    assert window.recording_box.currentText() == "⚑ 100uA.tif"
+    assert window.folder_list.currentItem().text().startswith("⚑")
+
+    QTest.keyClicks(window.reason, "weak")  # a reason can be typed straight away
+    assert saved(window).of(io_folder).flagged_files == {"100uA.tif": "weak"}
+
+    QTest.mouseClick(card, Qt.RightButton)
+    assert not card.flagged and not window.selection.flagged_files
+
+    QTest.mouseClick(window.strip.cards[MEAN], Qt.RightButton)  # the mean cannot be flagged
+    assert not window.selection.flagged_files
+
+
+def test_flag_box_and_flag_all(window, io_folder, monkeypatch):
+    window.choose_recording("200uA.tif")
     window.reason.setText("no response")
     window.flag_recording(True)
     assert saved(window).of(io_folder).flagged_files == {"200uA.tif": "no response"}
-    assert window.recording_box.currentText().startswith("⚑")
 
-    window.recording_box.setCurrentIndex(0)
+    window.choose_recording("100uA.tif")
     assert not window.flag_box.isChecked() and window.reason.text() == ""
+
+    monkeypatch.setattr(QInputDialog, "getText", lambda *args: ("slice moved", True))
     window.flag_folder()
-    assert len(window.selection.flagged_files) == 4
+    everything = ["100uA.tif", "200uA.tif", "300uA.tif", "no1.tif"]
+    assert window.selection.flagged_files == dict.fromkeys(everything, "slice moved")
+    assert all(card.flagged for name, card in window.strip.cards.items() if name != MEAN)
 
     window.flag_recording(False)
     assert not window.selection.is_flagged("100uA.tif")
+
+
+# ---------------------------------------------------------------------------
+# Moving on, settings, continuing
+# ---------------------------------------------------------------------------
 
 
 def test_accept_and_next(window, io_folder):
@@ -173,7 +261,12 @@ def test_folder_that_cannot_be_detected_says_why(app, recordings, tmp_path):
     settings = replace(Selections(recordings).settings, search_frames=[5000, 6000])
     window = RoiSelectionWindow(Selections(recordings, settings), tmp_path)
     assert "search window" in window.status.text()
-    assert not window.accept_button.isEnabled()
+    assert not window.accept_button.isEnabled() and not window.strip.cards
+
+
+# ---------------------------------------------------------------------------
+# Setup dialog and launcher
+# ---------------------------------------------------------------------------
 
 
 def test_setup_dialog(app, recordings, tmp_path, monkeypatch):
@@ -206,6 +299,53 @@ def test_setup_dialog_continues_saved_selections(window, app, recordings):
     assert "already holds selections" in dialog.note.text()
     dialog.accept()
     assert dialog.selections.folders["Animal 1/Slice 1/input output"].roi_center == (20, 20)
+
+
+def test_electrode_settings_are_greyed_out_when_the_electrode_is_not_looked_for(app):
+    form = SetupDialog().form
+    electrode_settings = [name for name in form.inputs if name.startswith("electrode_")]
+    assert len(electrode_settings) == 7
+    assert all(form.inputs[name].isEnabled() and form.labels[name].isEnabled() for name in electrode_settings)
+
+    form.inputs["find_electrode"].setChecked(False)
+    assert not any(form.inputs[name].isEnabled() or form.labels[name].isEnabled() for name in electrode_settings)
+    assert form.inputs["roi_radius_px"].isEnabled() and form.inputs["find_electrode"].isEnabled()
+
+    form.show_settings(replace(form.settings(), find_electrode=True))
+    assert all(form.inputs[name].isEnabled() for name in electrode_settings)
+
+
+def test_setup_dialog_shows_a_live_example(app, recordings, io_folder):
+    dialog = SetupDialog()
+    dialog.recordings.path.setText(str(recordings))
+    dialog.recordings.changed.emit()
+    preview = dialog.preview
+    assert preview.folder_box.count() == 2
+    preview.folder_box.setCurrentIndex(1)  # the "input output" folder
+    assert f"ROI centre ({CENTER[0]}, {CENTER[1]})" in preview.message.text()
+    assert preview.trace.axes.get_title() == "Mean of 200uA, 300uA"
+    assert preview.image.roi.radius == 20
+
+    dialog.form.inputs["roi_radius_px"].setValue(9)
+    dialog.form.inputs["find_electrode"].setChecked(False)
+    assert dialog.preview_timer.isActive()  # the example follows a moment after an edit
+    dialog.show_example()
+    assert preview.image.roi.radius == 9
+    assert "Electrode: 0 pixels" in preview.message.text()
+
+    dialog.form.inputs["search_frames"].setValue([5000, 6000])
+    dialog.show_example()
+    assert "search window" in preview.message.text()
+
+    dialog.form.inputs["baseline_frames"].setValue([50, 20])
+    dialog.show_example()
+    assert "first frame must be smaller" in preview.message.text()
+
+
+def test_settings_example_starts_with_the_open_folder(window, io_folder):
+    dialog = SetupDialog(window, window.selections, window.output_folder, example_folder=io_folder)
+    assert dialog.preview.folder_box.currentData() == io_folder
+    assert "ROI centre" in dialog.preview.message.text()
 
 
 def test_launcher_offers_four_packages(app):
