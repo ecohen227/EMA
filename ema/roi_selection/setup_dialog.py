@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -20,6 +21,7 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -33,8 +35,45 @@ from .settings import RoiSettings
 MAX_FRAME = 1_000_000
 
 
+class Section(QWidget):
+    """A group of settings under a heading. Clicking the heading shows or hides the settings."""
+
+    def __init__(self, title):
+        super().__init__()
+        self.title = title
+        self.heading = QToolButton()
+        self.heading.setText(title)
+        self.heading.setCheckable(True)
+        self.heading.setAutoRaise(True)
+        self.heading.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.heading.setToolTip("Click to show or hide these settings.")
+        self.heading.toggled.connect(self.show_settings)
+        self.content = QFrame()
+        self.content.setFrameShape(QFrame.StyledPanel)
+        self.form = QFormLayout(self.content)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(2)
+        layout.addWidget(self.heading)
+        layout.addWidget(self.content)
+        self.show_settings(False)
+
+    def show_settings(self, shown):
+        self.content.setVisible(shown)
+        self.heading.setArrowType(Qt.DownArrow if shown else Qt.RightArrow)
+
+    def show_note(self, note):
+        """Put a short remark after the title, or remove it with an empty text."""
+        self.heading.setText(f"{self.title}   ({note})" if note else self.title)
+
+
 class SettingsForm(QWidget):
-    """One input per setting, grouped in boxes. Built from the list in settings.py."""
+    """One input per setting, in sections that open on a click. Built from the list in settings.py.
+
+    The sections start closed, because the defaults suit most recordings. A
+    closed section says in its heading when one of its settings is not at its
+    default, so that a change is never out of sight.
+    """
 
     changed = pyqtSignal()  # any setting was edited
 
@@ -42,30 +81,38 @@ class SettingsForm(QWidget):
         super().__init__()
         self.inputs = {}
         self.labels = {}
+        self.sections = {}
         columns = QHBoxLayout(self)
         columns.setContentsMargins(0, 0, 0, 0)
         left, right = QVBoxLayout(), QVBoxLayout()
-        columns.addLayout(left)
-        columns.addLayout(right)
+        columns.addLayout(left, 1)
+        columns.addLayout(right, 1)
 
-        forms = {}
         for f in fields(RoiSettings):
             details = f.metadata
-            if details["group"] not in forms:
-                box = QGroupBox(details["group"])
-                forms[details["group"]] = QFormLayout(box)
-                (right if details["group"] in ("Electrode", "Display") else left).addWidget(box)
+            if details["group"] not in self.sections:
+                section = self.sections[details["group"]] = Section(details["group"])
+                (right if details["group"] in ("Electrode", "Display") else left).addWidget(section)
             widget = self._make_input(details)
             widget.setToolTip(details["help"])
             label = QLabel(details["label"] + ":")
             label.setToolTip(details["help"])
-            forms[details["group"]].addRow(label, widget)
+            self.sections[details["group"]].form.addRow(label, widget)
             self.inputs[f.name] = widget
             self.labels[f.name] = label
         left.addStretch()
         right.addStretch()
         self.inputs["find_electrode"].toggled.connect(self.grey_out_electrode_settings)
+        self.changed.connect(self.show_changes)
         self.show_settings(settings)
+
+    def show_changes(self):
+        """Say in each heading how many of its settings are not at their default."""
+        settings, defaults = self.settings(), RoiSettings()
+        for group, section in self.sections.items():
+            names = [f.name for f in fields(RoiSettings) if f.metadata["group"] == group]
+            changed = sum(getattr(settings, name) != getattr(defaults, name) for name in names)
+            section.show_note(f"{changed} changed from the default" if changed else "")
 
     def grey_out_electrode_settings(self):
         """The other electrode settings mean nothing while the electrode is not looked for."""
@@ -272,7 +319,7 @@ class SetupDialog(QDialog):
 
         steps = QVBoxLayout()
         steps.addWidget(self._step("1.  Recordings folder", "Every folder inside it that holds TIFF movies is listed, unless you narrow it down here.", self.recordings, self.filter, self.match_count))
-        steps.addWidget(self._step("2.  Settings", "Hover over a setting for an explanation. The example on the right follows your changes.", self.form))
+        steps.addWidget(self._step("2.  Settings", "The defaults suit the standard recordings. Click a heading to see or change its settings; the example on the right follows your changes.", self.form))
         steps.addWidget(self._step("3.  Output folder", f"The selections are saved here as {FILE_NAME}. Nothing is ever written into the recordings folder.", self.output))
         steps.addWidget(self.note)
         steps.addStretch()

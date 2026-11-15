@@ -47,7 +47,10 @@ class SettingsPreview(QGroupBox):
         layout.addWidget(self.image, 5)
         layout.addWidget(self.trace, 4)
         layout.addWidget(self.message)
+        # Large enough to read, also when the dialog is short because all settings sections are closed.
         self.setMinimumWidth(430)
+        self.image.setMinimumHeight(290)
+        self.trace.setMinimumHeight(220)
 
     def _mean_of(self, paths):
         return mean_recording(paths, self.load)

@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.0.0a3 — 2026-11-14
+
+- **Setup dialog:** the settings sections (*ROI*, *Timing*, *Electrode*, *Display*) are closed by default and
+  open when their heading is clicked. The defaults are meant to stay as they are, so they no longer fill the
+  dialog. The heading of a closed section says how many of its settings are not at their default.
+
 ## 3.0.0a2 — 2026-11-14
 
 ROI Selection, after the first round of use.

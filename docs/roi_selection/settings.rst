@@ -7,6 +7,12 @@ it is always known which settings a selection was made with. For the same
 reason, changing a setting later means every folder has to be reviewed
 again.
 
+In the dialog the settings sit in four sections, *ROI*, *Timing*,
+*Electrode* and *Display*, which open when their heading is clicked. They
+start closed: the defaults are meant to stay as they are unless your
+recordings need something else. The heading of a closed section says when
+one of its settings is not at its default.
+
 Trying a setting
 ----------------
 
@@ -18,9 +24,9 @@ timing windows, and one line with the numbers.
 .. figure:: ../screenshots/setup_example.png
    :width: 100%
 
-   Trying a higher darkness threshold. The example shows the baseline image,
-   where the electrode is easiest to see: the mask has grown along the image
-   edge.
+   Trying a higher darkness threshold, with the *Electrode* section open.
+   The example shows the baseline image, where the electrode is easiest to
+   see: the mask has grown along the image edge.
 
 * The list above the image chooses the example folder. Try a folder with a
   strong response and one with a weak response.

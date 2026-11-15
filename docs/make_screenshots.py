@@ -66,6 +66,7 @@ def main():
     dialog.show()
     save(dialog, "setup.png")
     dialog.preview.view_box.setCurrentIndex(1)
+    dialog.form.sections["Electrode"].heading.click()
     dialog.form.inputs["electrode_threshold"].setValue(0.97)
     dialog.show_example()
     save(dialog, "setup_example.png")

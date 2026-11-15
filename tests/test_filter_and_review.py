@@ -156,6 +156,30 @@ def test_electrode_settings_are_greyed_out_when_settings_open_without_electrode(
     assert dialog.form.inputs["electrode_edge"].isEnabled()
 
 
+def test_settings_sections_start_closed_and_open_on_a_click(app):
+    form = SettingsForm(RoiSettings())
+    assert list(form.sections) == ["ROI", "Timing", "Electrode", "Display"]
+    assert all(section.content.isHidden() for section in form.sections.values())
+
+    electrode = form.sections["Electrode"]
+    electrode.heading.click()
+    assert not electrode.content.isHidden() and form.sections["ROI"].content.isHidden()
+    electrode.heading.click()
+    assert electrode.content.isHidden()
+
+
+def test_closed_section_says_when_a_setting_is_not_at_its_default(app):
+    form = SettingsForm(replace(RoiSettings(), electrode_threshold=0.8, electrode_grow_px=2, roi_radius_px=15))
+    assert form.sections["Electrode"].heading.text() == "Electrode   (2 changed from the default)"
+    assert form.sections["ROI"].heading.text() == "ROI   (1 changed from the default)"
+    assert form.sections["Timing"].heading.text() == "Timing"
+
+    form.inputs["roi_radius_px"].setValue(20)
+    assert form.sections["ROI"].heading.text() == "ROI"
+    form.show_settings(RoiSettings())  # what Restore defaults does
+    assert form.sections["Electrode"].heading.text() == "Electrode"
+
+
 def test_after_a_settings_change_every_folder_must_be_reviewed_again(selections, io_folder, tmp_path):
     new = replace(selections.settings, roi_radius_px=12, find_electrode=False)
     selections.change_settings(new)

@@ -33,10 +33,17 @@ Only folders with / Skip folders with
    folder.
 
 Settings
-   The variables of the automatic detection. The defaults suit the standard
-   recordings (128 × 128 pixels, stimulation near frame 103). Hover over a
-   setting to read what it does; :doc:`settings` explains each one with a
-   picture. *Restore defaults* puts every setting back.
+   The variables of the automatic detection, in four sections: *ROI*,
+   *Timing*, *Electrode* and *Display*. The sections are closed, because the
+   defaults suit the standard recordings (128 × 128 pixels, stimulation near
+   frame 103) and most of the time nothing here needs changing. Click a
+   heading to open its section. Hover over a setting to read what it does;
+   :doc:`settings` explains each one with a picture.
+
+   A closed section says in its heading when something in it is not at its
+   default, for example *Electrode (1 changed from the default)*, so a
+   changed setting is never out of sight. *Restore defaults* puts every
+   setting back.
 
 Output folder
    Where ``roi_selections.json`` is saved. It must be outside the recordings
