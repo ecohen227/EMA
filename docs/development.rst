@@ -151,7 +151,10 @@ Building this documentation
    python -m sphinx docs docs/_build/html
 
 The first three commands redraw the figures and screenshots from the sample
-recordings (pass their folder as an argument if it is not found). They are only needed after a change to the detection or to
+recordings (pass their folder as an argument if it is not found);
+``make_screenshots.py`` also writes the example Excel files in
+``docs/examples``, which the page on the two files shows and offers for
+download. They are only needed after a change to the detection or to
 the windows; the pictures are stored in ``docs/figures`` and
 ``docs/screenshots``. The *Documentation* button of the start window opens
 ``docs/_build/html/index.html``.

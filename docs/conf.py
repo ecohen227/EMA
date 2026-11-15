@@ -94,6 +94,48 @@ def write_metric_tables(app):
     (folder / "spatial_settings.rst").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+EXAMPLES = Path(__file__).parent / "examples"
+
+
+def write_example_tables(app):
+    """Excerpts of the example Excel files (made by make_screenshots.py from made-up recordings), as tables."""
+    from openpyxl import load_workbook
+
+    folder = Path(app.srcdir) / "_generated"
+    folder.mkdir(exist_ok=True)
+    per_recording = load_workbook(EXAMPLES / "Example - Evoked per recording.xlsx", read_only=True)
+    per_slice = load_workbook(EXAMPLES / "Example - Evoked per slice.xlsx", read_only=True)
+
+    rows = list(per_recording["Recordings"].iter_rows(values_only=True))
+    wanted = ["Folder", "Recording", "Unstimulated partner", "Genotype", "Treatment", "Animal", "Slice",
+              "Current (µA)", "P1 response (%)", "PPR (ratio)", "Tau (ms)"]
+    columns = [rows[0].index(name) for name in wanted]
+    table = [[row[i] for i in columns] for row in rows[:4]] + [["…"] + [""] * (len(wanted) - 1)]
+    _write_table(folder / "example_recordings.rst", table, header=1)
+    # the measure sheets from row 3 on: rows 1 and 2 hold the measure's name and how to paste it
+    _write_table(folder / "example_prism_recording.rst", list(per_recording["P1 response"].iter_rows(min_row=3, values_only=True)), header=2)
+    _write_table(folder / "example_prism_slice.rst", list(per_slice["P1 response mean 100-400"].iter_rows(min_row=3, values_only=True)), header=1)
+
+
+def _write_table(path, rows, header):
+    """A list-table of spreadsheet rows, the first `header` of them bold; numbers with two decimals."""
+    def text(value):
+        if value is None:
+            return ""
+        if isinstance(value, float):
+            return f"{value:.2f}"
+        return str(value).replace("*", "\\*")
+
+    rows = [row for row in rows if any(cell is not None for cell in row)]
+    width = max(len(row) for row in rows)
+    lines = [".. list-table::", f"   :header-rows: {header}", ""]
+    for row in rows:
+        cells = [text(cell) for cell in row] + [""] * (width - len(row))
+        lines.append(f"   * - {cells[0]}".rstrip())
+        lines += [f"     - {cell}".rstrip() for cell in cells[1:]]
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 FIELDS = [("Named", "name"), ("Unit", "unit"), ("Definition", "definition"), ("Formula", "formula"),
           ("How", "method"), ("Empty when", "empty"), ("What it reflects", "meaning"), ("Be careful", "caveats"),
           ("Example", "example")]
@@ -111,3 +153,4 @@ def _metric_entry(entry):
 def setup(app):
     app.connect("builder-inited", write_settings_tables)
     app.connect("builder-inited", write_metric_tables)
+    app.connect("builder-inited", write_example_tables)

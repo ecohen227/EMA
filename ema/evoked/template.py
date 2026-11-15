@@ -77,7 +77,7 @@ class Template:
             selection=LISTED if listed else EVERY,
             condition_name="Delay" if self.recovery else "Current",
             condition_unit="ms" if self.recovery else "µA",
-            skip_words=["red"],
+            skip_words=["red", "test"],
             windows_follow_condition=self.recovery,
         )
         peak, baseline = self.frames(self.peak_ms), self.frames(self.baseline_ms)

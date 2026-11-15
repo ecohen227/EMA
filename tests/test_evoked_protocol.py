@@ -145,10 +145,11 @@ def test_measures_follow_the_settings():
     assert names.index("P2 response") < names.index("PPR") < names.index("Tau") < names.index("B1 min")
 
 
-def test_every_mode_skips_unstimulated_and_red(tmp_path):
-    names = ["50uA.tif", "300uA.tif", "no1.tif", "No2.tif", "hi1 red.tif", "hi1_red.tif", "hired.tif"]
+def test_every_mode_skips_unstimulated_red_and_test(tmp_path):
+    names = ["50uA.tif", "300uA.tif", "no1.tif", "No2.tif", "hi1 red.tif", "hi1_red.tif", "hired.tif",
+             "test stim 200uA.tif", "200uA test pulse.tif", "test-1.tif", "contest.tif"]
     paths = [tmp_path / name for name in names]
-    assert [p.name for p in paired_pulse().measured_files(paths)] == ["50uA.tif", "300uA.tif", "hired.tif"]
+    assert [p.name for p in paired_pulse().measured_files(paths)] == ["50uA.tif", "300uA.tif", "hired.tif", "contest.tif"]
 
 
 # ---------------------------------------------------------------------------

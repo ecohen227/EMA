@@ -105,6 +105,8 @@ def test_skip_words_and_flagged_recordings_are_left_out(study, tmp_path):
     result = analysis.folders[(study.recordings_folder / "LKI WT F5823/IFN 4H/Slice 1/input output").as_posix()]
     assert result.skipped == [["100uA.tif", "Flagged in ROI Selection: drift"], ["no2.tif", "Flagged in ROI Selection."]]
     assert [(r.file, r.partner) for r in result.recordings] == [("200uA.tif", "no1.tif")]  # no2 is flagged: the one before
+    assert result.recordings[0].problems == ["No unstimulated recording was made after it, so it is paired with no1.tif, "
+                                             "made 1 min before it."]
     other = analysis.folders[(study.recordings_folder / "LKI WT F5823/IFN 4H/Slice 2/input output").as_posix()]
     assert [r.file for r in other.recordings] == ["100uA.tif", "200uA.tif"]  # '200uA red' has a skip word
 
@@ -329,20 +331,21 @@ def test_the_window_runs_an_analysis_and_writes_the_tables(app, study, tmp_path,
     window.output_changed()
     assert window.folders_table.rowCount() == 3
     assert window.folders_table.item(0, 2).text() == "HET"
-    assert "A new analysis" in window.output_info.text()
+    assert window.output_info.text() == "New: every folder will be measured."
 
     window.start()
     window.worker.wait()
     app.processEvents()
-    assert "Done: 3 folders measured (6 recordings)" in window.status.text()
+    assert "3 folders measured (6 recordings), 0 unchanged." in window.status.text()
+    assert window.status.text().endswith("Tables written.")
     assert (tmp_path / "out" / PER_RECORDING).is_file() and (tmp_path / "out" / PER_SLICE).is_file()
-    assert "measured with this protocol" in window.output_info.text()
+    assert window.output_info.text() == "3 folders measured before: only new or changed folders will be measured."
 
     monkeypatch.setattr(QMessageBox, "information", lambda *args: None)
     window.start()
     window.worker.wait()
     app.processEvents()
-    assert "Done: 0 folders measured (0 recordings) in 0 min 0 s.\n3 folders unchanged: their results were kept." in window.status.text()
+    assert window.status.text() == "Done in 0 min 0 s: 0 folders measured (0 recordings), 3 unchanged.\nTables written."
     window.close()
 
 
@@ -392,3 +395,23 @@ def test_the_window_asks_before_keeping_folders_of_another_roi_file(app, study, 
     assert "not in this ROI file (or do not pass the folder filter): 1 folder, for example" in asked[0]
     assert len(Analysis.load(tmp_path / "out" / FILE_NAME).folders) == 2
     window.close()
+
+
+def test_extra_recordings_stay_off_the_measure_sheets(study, tmp_path):
+    folder = study.recordings_folder / "LKI HET M5821/CTRL 2H/Slice 1/input output"
+    make_recording(folder / "200uA test pulse.tif", 0.05, seed=7, clock="09:58:00")
+    make_recording(folder / "test stim.tif", 0.05, seed=8, clock="09:59:00")
+    analysis = measured(study, small_protocol(), tmp_path / "out")
+    write_workbooks(analysis)
+    book = load_workbook(tmp_path / "out" / PER_RECORDING)
+    assert len(rows(book["Recordings"])) == 1 + 8
+    prism = rows(book["P1 response"])
+    assert [row[0] for row in prism[4:]] == [100, 200]  # no row for 'test stim.tif', which has no condition
+    result = analysis.folders[folder.as_posix()]
+    plain = next(r for r in result.recordings if r.file == "200uA.tif")
+    assert prism[5][3] == pytest.approx(plain.values["P1 response"])  # 200uA.tif, not '200uA test pulse.tif'
+    notes = [row[1:] for row in rows(book["Notes"])[1:]]
+    assert ["200uA test pulse.tif", "Has the same condition as 200uA.tif, so the measure sheets show 200uA.tif only "
+            "(both are on the Recordings sheet). To use this one instead, flag 200uA.tif in ROI Selection."] in notes
+    assert ["test stim.tif", "Has no condition (its name does not start with a number), so it is on the Recordings "
+            "sheet only."] in notes

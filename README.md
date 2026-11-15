@@ -6,8 +6,8 @@ one start window:
 | Package | What it does | Status |
 |---|---|---|
 | **ROI Selection** | Finds the ROI and the electrode of every recording folder, lets you correct them and flag bad recordings | Ready |
-| **Evoked Analysis** | Measures the evoked responses inside the selected ROIs with a protocol, and writes the results, labelled from the folder names, in two Excel files laid out for Prism | Ready |
 | **Evoked Analysis Configurator** | Makes the protocols the evoked analysis measures with: pulses, windows, comparisons, fits, kinetic and spatial measures, slice summaries | Ready |
+| **Evoked Analysis** | Measures the evoked responses inside the selected ROIs with a protocol, and writes the results, labelled from the folder names, in two Excel files laid out for Prism | Ready |
 | Spontaneous Event Analysis | Finds and measures spontaneous events in unstimulated recordings | Planned |
 
 ## Install (once per computer)

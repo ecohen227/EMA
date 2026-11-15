@@ -11,10 +11,12 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMenu,
     QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -37,6 +39,21 @@ def _split(text):
     return [part.strip() for part in text.split(",") if part.strip()]
 
 
+def _menu_button(text, items):
+    """A button that opens a menu of (text, tooltip, action)."""
+    button = QToolButton()
+    button.setText(text + " ▾")
+    button.setPopupMode(QToolButton.InstantPopup)
+    menu = QMenu(button)
+    menu.setToolTipsVisible(True)
+    for label, tip, action in items:
+        entry = menu.addAction(label)
+        entry.setToolTip(tip)
+        entry.triggered.connect(action)
+    button.setMenu(menu)
+    return button
+
+
 class LabelsEditor(QWidget):
     """The labels as a tree: each label, and under it its values with their spellings.
 
@@ -52,17 +69,25 @@ class LabelsEditor(QWidget):
         self.labels = LabelSet()
         self.tree = QTreeWidget()
         self.tree.setColumnCount(2)
-        self.tree.setHeaderLabels(["Label and its values", "Spellings in folder names (separated by commas)"])
+        self.tree.setHeaderLabels(["Label / value", "Spellings, separated by commas"])
         self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.tree.setEditTriggers(QTreeWidget.NoEditTriggers)
         self.tree.itemDoubleClicked.connect(self._edit)
         self.tree.itemChanged.connect(self._read_tree)
 
+        add = _menu_button("Add", [
+            ("Label", "A label with values, such as Genotype with WT and HET.", self.add_label),
+            ("Number label", "A label whose value is a number in the folder name, such as Slice in 'Slice 3'.", self.add_number_label),
+            ("Value of the selected label", "Another value of the selected label.", self.add_value),
+        ])
+        more = _menu_button("More", [
+            ("Restore the defaults", "Line, genotype, treatment, duration, sex, animal and slice, as in the lab's folders.", self.restore_defaults),
+            ("Import…", "Use the labels of a labels file or of another analysis.", self.import_labels),
+            ("Export…", "Save these labels in a file, for example to share them.", self.export_labels),
+        ])
         buttons = QHBoxLayout()
+        buttons.addWidget(add)
         for text, tip, action in (
-            ("Add label", "A label with values, such as Genotype with WT and HET.", self.add_label),
-            ("Add number label", "A label whose value is a number in the folder name, such as Slice in 'Slice 3'.", self.add_number_label),
-            ("Add value", "Another value of the selected label.", self.add_value),
             ("Remove", "Remove the selected label or value.", self.remove),
             ("▲", "Move the selected label or value up.", lambda: self.move(-1)),
             ("▼", "Move the selected label or value down.", lambda: self.move(1)),
@@ -72,36 +97,27 @@ class LabelsEditor(QWidget):
             button.clicked.connect(action)
             buttons.addWidget(button)
         buttons.addStretch()
-        files = QHBoxLayout()
-        for text, tip, action in (
-            ("Restore defaults", "The labels of the lab's folder names: line, genotype, treatment, duration, sex, animal, slice.", self.restore_defaults),
-            ("Import…", "Use the labels saved in a labels file or in another analysis.", self.import_labels),
-            ("Export…", "Save these labels in a file, for example to share them.", self.export_labels),
-        ):
-            button = QPushButton(text)
-            button.setToolTip(tip)
-            button.clicked.connect(action)
-            files.addWidget(button)
-        files.addStretch()
-        self.whole_path = QCheckBox("Also read the recordings folder and the folders above it")
+        buttons.addWidget(more)
+        self.whole_path = QCheckBox("Also read the folders above the recordings folder")
         self.whole_path.setToolTip(
             "Off: only the folders inside the recordings folder of the ROI file are read.\n"
             "On: the recordings folder and every folder above it are read too (the nearest folder still wins)."
         )
         self.whole_path.toggled.connect(self._whole_path_toggled)
 
+        hint = _hint("Double-click a name or its spellings to change them. # stands for a number: 'Slice #' reads "
+                     "'Slice 3'. Hover here for how folder names are read.")
+        hint.setToolTip(
+            "Each folder name is cut into words at spaces, punctuation and where letters meet digits, ignoring case:\n"
+            "'IFNy_4hr' is ifny, 4, hr. A spelling matches when its words appear in that order: '4HR' matches\n"
+            "'IFNy_4hr' but not '14HR'. # stands for any number: 'Slice #' matches 'Slice 3' and 'slice3'; 'F#'\n"
+            "matches 'F5819'. The folders are read from the innermost out; the first one that holds a label gives its value."
+        )
         layout = QVBoxLayout(self)
-        layout.addWidget(_hint(
-            "Each folder name is cut into words at spaces, punctuation and where letters meet digits, ignoring case: "
-            "'IFNy_4hr' is ifny, 4, hr. A spelling matches when its words appear in that order: '4HR' matches "
-            "'IFNy_4hr' but not '14HR'. In a spelling, # stands for any number: 'Slice #' matches 'Slice 3' and "
-            "'slice3', and 'F#' matches 'F5819'. The folders are read from the innermost out; the first one that "
-            "holds a label gives its value. Double-click a name or a list of spellings to change it."
-        ))
+        layout.addWidget(hint)
         layout.addLayout(buttons)
         layout.addWidget(self.tree, 1)
         layout.addWidget(self.whole_path)
-        layout.addLayout(files)
 
     def show_labels(self, labels):
         self.labels = labels
@@ -267,20 +283,17 @@ class NearMissList(QWidget):
         self.labels = None
         self.misses = []
         self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["Word", "Looks like", "In folders", "It means", ""])
+        self.table.setHorizontalHeaderLabels(["Word", "Looks like", "Folders", "It means", ""])
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         header = self.table.horizontalHeader()
         for column in range(5):
             header.setSectionResizeMode(column, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.Stretch)
-        self.empty = QLabel("No near misses: every word that looks like a spelling is one.")
+        self.empty = QLabel("None: every word that looks like a spelling is one.")
         layout = QVBoxLayout(self)
-        layout.addWidget(_hint(
-            "Words in the folder names that look like a spelling of a label but are not one, such as 'Contrl' for "
-            "CTRL or 'HTE' for HET. Say what each means: it is then added to the spellings of that value, or never "
-            "shown again if it is not a label. Hover over the folder count to see the folders."
-        ))
+        layout.addWidget(_hint("Words that look like a label but are not one, such as 'Contrl'. Choose what each "
+                               "means and press Apply."))
         layout.addWidget(self.empty)
         layout.addWidget(self.table, 1)
 
@@ -294,8 +307,9 @@ class NearMissList(QWidget):
             self.table.insertRow(row)
             self.table.setItem(row, 0, QTableWidgetItem(miss.word))
             looks = f"{miss.value} ({miss.label})" if miss.value else f"{miss.label} number"
-            self.table.setItem(row, 1, QTableWidgetItem(f"{looks}: {miss.spelling}"))
-            count = QTableWidgetItem(f"{len(miss.folders)}: {miss.folders[0]}" + (" …" if len(miss.folders) > 1 else ""))
+            self.table.setItem(row, 1, QTableWidgetItem(looks))
+            more = f"  (+{len(miss.folders) - 1} more)" if len(miss.folders) > 1 else ""
+            count = QTableWidgetItem(miss.folders[0] + more)
             count.setToolTip("\n".join(miss.folders[:40]) + ("\n…" if len(miss.folders) > 40 else ""))
             self.table.setItem(row, 2, count)
             choice = QComboBox()

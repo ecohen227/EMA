@@ -3,14 +3,17 @@ The two Excel files
 
 Every run writes two files into the output folder:
 
-``Evoked per recording.xlsx``
-   One row per recording: every per-recording measure of the protocol.
+* ``Evoked per recording.xlsx``: one row per recording;
+* ``Evoked per slice.xlsx``: one row per slice (recording folder).
 
-``Evoked per slice.xlsx``
-   One row per slice (recording folder): every per-slice measure of the
-   protocol, such as the mean of the PPR over the slice's recordings.
+**Example files**, made from eight made-up slices with the built-in
+*2P paired pulse* protocol, grouped by genotype and treatment:
+:download:`Example - Evoked per recording.xlsx <../examples/Example - Evoked per recording.xlsx>`
+and :download:`Example - Evoked per slice.xlsx <../examples/Example - Evoked per slice.xlsx>`.
+The tables below are taken from them.
 
-Both have the same sheets:
+What is in each file
+--------------------
 
 .. list-table::
    :header-rows: 1
@@ -18,145 +21,70 @@ Both have the same sheets:
 
    * - Sheet
      - What it holds
-   * - **Recordings** / **Slices**
-     - The whole table: the folder (and, per recording, the file and its
-       unstimulated partner), the labels, the condition (such as
-       *Current (µA)*), whether the ROI was reviewed in ROI Selection, then
-       one column per measure, with its unit in the heading. Use it for
-       Excel, R or Python, or for a Prism *Multiple variables* table.
+   * - **Recordings** (or **Slices**)
+     - Everything in one table: the folder, the recording and its partner,
+       the labels, the condition, then one column per measure, with its
+       unit. Use it in Excel, R or Python, or in a Prism *Multiple
+       variables* table.
    * - one sheet per measure
-     - The same numbers laid out to paste into Prism (below). The sheet is
-       named after the measure; ``/`` becomes ``÷`` (``P2÷P1``), because
-       Excel does not allow it.
+     - The same numbers laid out to paste into Prism (below). ``/`` in a
+       name becomes ``÷`` (``P2÷P1``).
    * - **Notes**
-     - Every recording that was not measured and why, every value that
-       could not be measured (such as a fit that did not converge), and the
-       labels to check.
+     - What was not measured and why, and labels to check.
    * - **About**
-     - When and with which protocol the file was made, the ROI file, the
-       labels and their spellings, and the definition and unit of every
-       measure.
+     - The protocol, the labels, and what every measure is.
 
-A value that could not be measured is an **empty cell**, never 0. Rows are
-in the order of the groups (see below), then of the labels.
+A value that could not be measured is an **empty cell**, never 0.
 
-Groups
-------
+The start of the *Recordings* sheet of the example (some of its columns):
 
-The slices are grouped by the values of the labels ticked under **Groups in
-the tables**. With *Genotype* and *Treatment* ticked, the groups are
-WT CTRL, WT IFN, HET CTRL and HET IFN, in the order the values are listed on
-the Labels tab. A slice whose label was not found goes into a group such as
-*(no Genotype) CTRL*. With no label ticked, all slices are one group.
+.. include:: ../_generated/example_recordings.rst
 
-Per recording: a Prism grouped table
-------------------------------------
+Per recording: Prism grouped tables
+-----------------------------------
 
-Each measure sheet of ``Evoked per recording.xlsx`` is a grouped table: one
-row per condition (each current, or each recovery delay), one group of
-columns per group of slices, and in each group one column per slice. A
-slice keeps its column in every row, so the rows of one column are the
-repeated measures of one slice. For example, *P1 response* of made-up
-recordings:
+Each measure sheet of ``Evoked per recording.xlsx`` has one row per
+condition (each current), a group of columns per group of slices (here
+WT CTRL, WT IFN, HET CTRL and HET IFN), and one column per slice. Rows 1
+and 2 give the measure with its unit and how to paste it; the *P1 response*
+sheet of the example from row 3 on:
 
-.. list-table::
-   :header-rows: 0
-
-   * - **P1 response (%)**
-     -
-     -
-     -
-     -
-   * - *Prism: grouped table, 2 replicate values …*
-     -
-     -
-     -
-     -
-   * -
-     - **WT CTRL**
-     -
-     - **HET CTRL**
-     -
-   * - **Current (µA)**
-     - Animal 5820 Slice 1
-     - Animal 5770 Slice 2
-     - Animal 5819 Slice 1
-     -
-   * - 100
-     - 3.40
-     - 4.17
-     - 2.31
-     -
-   * - 200
-     - 6.80
-     - 8.17
-     - 4.73
-     -
-   * - 300
-     - 9.11
-     - 11.04
-     - 6.32
-     -
-
-Every group has as many columns as the largest group; the columns a smaller
-group does not need stay empty. Row 4 names each slice by its number
-labels (here Animal and Slice), or by its folder when it has none.
+.. include:: ../_generated/example_prism_recording.rst
 
 To paste it into Prism:
 
-1. Make a **Grouped** table, with *Enter N replicate values in side-by-side
-   subcolumns*, N being the number in row 2 of the sheet (here 2). For a
-   curve against the current, an **XY** table with N replicate Y values
-   works the same way.
-2. In Excel, select from the first condition in column A (row 5) down to the
-   last value on the right, and copy.
-3. In Prism, click the first row title (in an XY table, the first X) and
-   paste. The group titles are in row 3 of the sheet; type them as the data
-   set titles.
+1. Make a **Grouped** table with *N replicate values in side-by-side
+   subcolumns*; N is given in row 2 (here 2). For a curve against the
+   current, an **XY** table with N replicates works the same way.
+2. Copy from cell A5 to the last value.
+3. Click the first row title in Prism (in an XY table, the first X) and
+   paste. Type the group titles (row 3) as the data set titles.
 
-When a slice has two recordings with the same condition (such as
-``300uA.tif`` and ``300uA 2.tif``), the measure sheets show the first by
-name, and the *Notes* sheet says so. Both are on the *Recordings* sheet.
+Smaller groups are padded with empty columns, so every group is as wide as
+the largest. A slice keeps its column in every row.
 
-Per slice: a Prism column or grouped table
-------------------------------------------
+The rows are the conditions only: a recording whose name does not start
+with a number is on the *Recordings* sheet only. When a slice has two
+recordings with the same condition, such as ``50uA.tif`` and
+``50uA (2).tif``, the sheet shows the plainest name, ``50uA.tif``; to use
+the other one, flag ``50uA.tif`` in ROI Selection. The *Notes* sheet lists
+both cases.
 
-Each measure sheet of ``Evoked per slice.xlsx`` is, by default, a
-**column table**: one column per group, one value per slice:
+Per slice: Prism column tables
+------------------------------
 
-.. list-table::
-   :header-rows: 0
+Each measure sheet of ``Evoked per slice.xlsx`` has one column per group
+and one value per slice. The *P1 response mean 100-400* sheet of the
+example from row 3 on:
 
-   * - **P1 response mean 100-400 (%)**
-     -
-     -
-     -
-   * - *Prism: column table, one column per group …*
-     -
-     -
-     -
-   * - **WT CTRL**
-     - **WT IFN**
-     - **HET CTRL**
-     - **HET IFN**
-   * - 6.44
-     - 7.13
-     - 4.45
-     - 5.16
-   * - 7.79
-     -
-     -
-     - 5.79
+.. include:: ../_generated/example_prism_slice.rst
 
-Make a **Column** table in Prism, select the values from row 4 down, and
-paste them into the first value of the first column.
+Make a **Column** table in Prism, copy from cell A4 to the last value, and
+paste at the first value.
 
-For a two-way comparison, such as genotype × treatment, choose a label under
-**Rows of the per-slice measure sheets**, for example *Treatment*, and tick
-only *Genotype* as group. Each sheet is then a **grouped table**: one row per
-treatment (CTRL, IFN), one group of columns per genotype, each slice a value
-in its row. Paste it into a Prism grouped table with side-by-side
-subcolumns, as above.
+For a two-way comparison (genotype × treatment), set **Slice sheets** to
+*One row per Treatment* and group by *Genotype* only. Each sheet is then a
+grouped table with one row per treatment; paste it as above.
 
 If the protocol has no per-slice measures, the per-slice file only lists
 the slices. Choose them in the configurator, under *Comparisons and

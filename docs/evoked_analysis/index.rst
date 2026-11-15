@@ -19,37 +19,36 @@ It needs
 .. figure:: ../screenshots/analysis.png
    :width: 100%
 
-   The Evoked Analysis window. Left: the ROI file, the protocol, the output
-   folder and how the tables are grouped. Right: every folder that will be
-   measured, with the labels read from its folder names. The red cell is a
-   label that was not found: the folder is called ``Contrl 4HR``, which is
-   not a spelling of CTRL yet.
+   The Evoked Analysis window. Left: what to measure and where the tables
+   go. Right: every folder that will be measured, with the labels read from
+   its folder names. The red cell is a label that was not found: the folder
+   is called ``Contrl 2HR``, and *Contrl* is not a spelling of CTRL yet.
+   Hover over any setting for what it does.
 
 Step by step
 ------------
 
-1. **ROI file.** Choose the ``roi_selections.json`` of ROI Selection. Its
-   folders are listed on the right. Use **Only folders with** to keep the
-   folders of one kind of recording: ``input output`` for the 2P protocol,
-   ``11p`` for the 11P protocol. A protocol measures every folder it is
-   given, so a 2P protocol run on a train folder would measure the train
-   recordings as if they were paired pulses.
-2. **Protocol.** Choose a protocol from the library, or **Open file…** for a
-   protocol file kept elsewhere. Its description and the number of measures
-   are shown under it, with a warning if it has no per-slice measures.
-3. **Output folder.** Choose a folder outside the recordings. If it holds an
-   earlier analysis, its labels and groups are shown, and a line says what a
-   run will do (see :ref:`running-again`).
-4. **Labels.** Check the table on the right. A red cell is a label that was
-   not found in the folder names; an orange one needs a look (hover over
-   it). Look at the **Near misses** tab: words that look like a spelling of
-   a label but are not one. See :doc:`labels`.
-5. **Groups.** Tick the labels that form the groups of the Prism sheets,
-   such as *Genotype* and *Treatment* for the groups WT CTRL, WT IFN,
-   HET CTRL and HET IFN. See :doc:`tables`.
-6. Press **Run the analysis**. The progress bar shows the recording being
-   measured. **Stop** stops after that recording; the folders measured so
-   far are kept, and the next run measures the rest.
+1. **ROI file**: the ``roi_selections.json`` of ROI Selection. Its folders
+   are listed on the right.
+2. **Folders**: keep the folders of one kind of recording, for example
+   *Only folders with* ``input output`` for the 2P protocol, ``11p`` for the
+   11P protocol. A protocol measures every folder it is given, so a 2P
+   protocol run on a train folder would measure the train as paired pulses.
+3. **Protocol**: one from the library, or **Open…** for a protocol file kept
+   elsewhere. Hover over the line under it for its description.
+4. **Output folder**: a folder outside the recordings. The line under it
+   says what a run will do (see :ref:`running-again`).
+5. **Labels**: check the **Folders** tab. A red cell is a label that was not
+   found in the folder names; an orange one needs a look (hover over it).
+   Then the **Near misses** tab: words that look like a spelling of a label
+   but are not one. See :doc:`labels`.
+6. **Group by**: the labels whose values make the groups of the Prism
+   sheets, such as *Genotype* and *Treatment* for WT CTRL, WT IFN, HET CTRL
+   and HET IFN. **Slice sheets** sets the layout of the per-slice sheets.
+   See :doc:`tables`.
+7. Press **Run the analysis**. **Stop** stops after the recording being
+   measured; the folders measured so far are kept, and the next run
+   measures the rest.
 
 When it is done, both Excel files are in the output folder, and the summary
 under the buttons says how many folders and recordings were measured and
@@ -65,7 +64,8 @@ What is measured in each folder
 
 Each recording folder is one **slice**. In it, the protocol chooses the
 recordings to measure: every stimulated recording (all but the ``no`` files
-and those with a skip word such as ``red``), or the recordings it lists.
+and those with a skip word: ``red`` and ``test`` in the built-in 2P
+protocols), or the recordings it lists.
 Then, for each recording:
 
 * A recording flagged in ROI Selection is left out. A flagged unstimulated
@@ -117,7 +117,7 @@ only what it has to:
        the same recordings in another place (another computer, a moved
        folder), so they are not in the tables twice.
    * - The labels or the groups changed
-     - Nothing is measured; press **Write the tables**, or run.
+     - Nothing is measured; press **Rewrite the tables**, or run.
    * - The protocol changed (any setting), or EMA was updated
      - Every folder is measured again with the new protocol, and both files
        are replaced. EMA asks first.
@@ -128,7 +128,7 @@ new one.
 The Excel files are written again from ``evoked_analysis.json`` after every
 run, so changes made in them by hand are lost: copy what you need into
 Prism or another file. If a file is open in Excel, it cannot be replaced:
-close it and press **Write the tables**.
+close it and press **Rewrite the tables**.
 
 .. toctree::
    :maxdepth: 2

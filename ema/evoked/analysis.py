@@ -310,11 +310,21 @@ def measure_folder(protocol, folder, selection, step=None):
             partner.name if partner is not None else "",
             protocol.condition_of(path.name, recording),
             values,
-            list(measurement.problems),
+            list(measurement.problems) + _partner_notes(path, partner, times),
         ))
     if result.recordings:
         result.summary = summarise(protocol, [(r.condition, r.values) for r in result.recordings])
     return result
+
+
+def _partner_notes(path, partner, times):
+    """A note when the partner found by time stamp was made before the recording: none was made after it."""
+    made, partner_made = times.get(path), times.get(partner)
+    if partner is None or made is None or partner_made is None or partner_made >= made:
+        return []
+    minutes = (made - partner_made).total_seconds() / 60
+    return [f"No unstimulated recording was made after it, so it is paired with {partner.name}, made "
+            f"{minutes:.0f} min before it."]
 
 
 # ---------------------------------------------------------------------------

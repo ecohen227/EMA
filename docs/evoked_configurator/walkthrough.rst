@@ -125,8 +125,10 @@ Unstimulated partner
 Recordings that are measured
    * **Every stimulated recording in the folder**: every recording whose
      name does not start with ``no``, except those with a word under *Skip
-     names with* (such as ``red``). Their condition, for example the
-     current, is the first number in the file name.
+     names with* (``red`` and ``test`` in the built-in 2P protocols, so
+     ``200uA red.tif`` and ``test stim 200uA.tif`` are left out). Their
+     condition, for example the current, is the number the file name
+     starts with: 300 for ``300uA.tif``.
    * **Only these recordings**: a list. Each row gives a file, its
      unstimulated partner (left empty for the one made right after it), its
      condition (for example the delay of the recovery pulse), and the timing

@@ -31,6 +31,22 @@
   groups; tabs with every folder and its labels (missing and doubtful ones coloured), the label editor (import,
   export, defaults) and the near misses. Runs in a worker thread with progress and *Stop*. Opened from the start
   window.
+- After a trial on four animals of the study (25 folders, 131 recordings): the rows of the per-recording Prism
+  sheets are the conditions only (a recording without one, such as `test stim 200uA.tif`, is on the Recordings sheet
+  only); of two recordings with the same condition the plainest name is shown (`200uA.tif` before
+  `200uA test pulse.tif`, `50uA.tif` before `50uA (2).tif`); a recording paired with an unstimulated recording made
+  before it (none was made after) gets a note saying how long before. All on the Notes sheet.
+- The built-in 2P protocols (and new protocols made from the template) skip recordings with the word *test* in
+  their name, as well as *red*: test stimulations such as `test stim 200uA.tif` or `200uA test pulse.tif` are not
+  part of the input–output series and no longer count in the slice summaries.
+- Simpler window: one short form (ROI file, folders, protocol, output folder, group by, slice sheets) with the
+  explanations in tooltips, one-line status texts, the group labels as tick boxes, and one-line hints on the
+  Folders, Labels and Near misses tabs; the label editor's buttons are an *Add* menu, *Remove*, ▲ ▼ and a *More*
+  menu. The instruction at the top of each Prism sheet is one line.
+- The start window lists the Evoked Analysis Configurator before the Evoked Analysis.
+- Example output: `docs/make_screenshots.py` runs the analysis on eight made-up slices named like the lab's and
+  saves `docs/examples/Example - Evoked per recording.xlsx` and `… per slice.xlsx`; the documentation offers them for
+  download and shows excerpts read from them at build time, so the page always matches what EMA writes.
 - `ema.evoked.traces.make_movie` builds the pixel movie for the spatial measures.
 
 ### Removed: OneDrive handling

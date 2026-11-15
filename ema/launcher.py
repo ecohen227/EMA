@@ -34,8 +34,8 @@ def open_analysis(launcher):
 # name, what it does, the function that opens it (None while it is not built yet)
 PACKAGES = [
     ("ROI Selection", "Find the ROI and the electrode of every recording, and flag bad recordings.", open_roi_selection),
-    ("Evoked Analysis", "Measure the evoked responses inside the selected ROIs, and write the tables for Prism.", open_analysis),
     ("Evoked Analysis Configurator", "Set the pulses, windows and measures of the evoked analysis.", open_configurator),
+    ("Evoked Analysis", "Measure the evoked responses in every ROI, and write the tables for Prism.", open_analysis),
     ("Spontaneous Event Analysis", "Find and measure spontaneous events in unstimulated recordings.", None),
 ]
 

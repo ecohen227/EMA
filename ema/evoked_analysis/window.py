@@ -7,20 +7,19 @@ from PyQt5.QtCore import Qt, QThread, QUrl, pyqtSignal
 from PyQt5.QtGui import QColor, QDesktopServices
 from PyQt5.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QFileDialog,
-    QGroupBox,
+    QFormLayout,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QSplitter,
     QTableWidget,
     QTableWidgetItem,
@@ -41,9 +40,11 @@ from .labels_editor import LabelsEditor, NearMissList
 
 MISSING = QColor("#fde2e1")
 NOTED = QColor("#fff1d6")
+WARNING = "color:#b35c00"
+ERROR = "color:#c1121f"
 
 
-def _hint(text=""):
+def _grey(text=""):
     label = QLabel(text)
     label.setWordWrap(True)
     label.setStyleSheet("color: gray")
@@ -52,12 +53,6 @@ def _hint(text=""):
 
 def _folders(count):
     return f"{count} folder" if count == 1 else f"{count} folders"
-
-
-def _short(path, parts=3):
-    """The last folders of a long path, such as '…\\Slice 1\\input output'; the whole path when it is short."""
-    path = Path(path)
-    return str(path) if len(path.parts) <= parts + 1 else "…\\" + "\\".join(path.parts[-parts:])
 
 
 def _is_inside(folder, parent):
@@ -125,7 +120,7 @@ class AnalysisWindow(QMainWindow):
         self.analysis = Analysis(labels=_remembered_labels())
         self.worker = None
         self.started = 0.0
-        self.entries = []
+        self.group_boxes = {}
         self._build_window()
         self._restore()
 
@@ -136,48 +131,67 @@ class AnalysisWindow(QMainWindow):
     def _build_window(self):
         self.roi_input = FileInput("Choose the ROI file", "ROI files (roi_selections.json);;JSON files (*.json)")
         self.roi_input.changed.connect(self.load_roi_file)
-        self.roi_info = _hint()
+        self.roi_info = _grey()
         self.filter = FolderFilter()
         self.filter.changed.connect(self.filter_changed)
-        self.folder_count = QLabel()
 
         self.protocol_box = QComboBox()
-        self.protocol_box.setMinimumWidth(240)
         self.protocol_box.activated.connect(self.choose_protocol)
-        open_protocol = QPushButton("Open file…")
+        open_protocol = QPushButton("Open…")
         open_protocol.setToolTip("Use a protocol file that is not in the library.")
         open_protocol.clicked.connect(self.open_protocol_file)
         protocol_row = QHBoxLayout()
         protocol_row.addWidget(self.protocol_box, 1)
         protocol_row.addWidget(open_protocol)
-        self.protocol_info = _hint()
-        self.protocol_problems = QLabel()
-        self.protocol_problems.setWordWrap(True)
+        self.protocol_info = _grey()
 
         self.output = FolderInput("Choose the output folder")
         self.output.changed.connect(self.output_changed)
-        self.output_info = QLabel()
-        self.output_info.setWordWrap(True)
+        self.output_info = _grey()
 
-        self.group_list = QListWidget()
-        self.group_list.setMaximumHeight(120)
-        self.group_list.itemChanged.connect(self.grouping_changed)
+        self.groups = QWidget()
+        self.groups_grid = QGridLayout(self.groups)
+        self.groups_grid.setContentsMargins(0, 0, 0, 0)
         self.rows_box = QComboBox()
         self.rows_box.activated.connect(self.grouping_changed)
-        rows_row = QHBoxLayout()
-        rows_row.addWidget(QLabel("Rows of the per-slice measure sheets:"))
-        rows_row.addWidget(self.rows_box, 1)
+
+        form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        rows = [
+            ("ROI file", "The roi_selections.json made by ROI Selection. Each folder is measured with its ROI and "
+                         "electrode; recordings flagged there are left out.", [self.roi_input, self.roi_info]),
+            ("Folders", "Measure only the folders with one of these words in their path (for example 'input output' "
+                        "for the 2P protocol), and none of the words to skip.", [self.filter]),
+            ("Protocol", "What is measured, as made in the Evoked Analysis Configurator.", [protocol_row, self.protocol_info]),
+            ("Output folder", f"Where {PER_RECORDING}, {PER_SLICE} and {FILE_NAME} (the kept results) are written. "
+                              "It must be outside the recordings.", [self.output, self.output_info]),
+            ("Group by", "The labels whose values make the groups of the Prism sheets: with Genotype and Treatment, "
+                         "the groups are WT CTRL, WT IFN, HET CTRL and HET IFN.", [self.groups]),
+            ("Slice sheets", "How the per-slice Prism sheets are laid out: one column per group (a column table), or "
+                             "one row per value of a label, such as CTRL and IFN (a grouped table).", [self.rows_box]),
+        ]
+        for title, tip, parts in rows:
+            field = QVBoxLayout()
+            field.setSpacing(2)
+            for part in parts:
+                field.addWidget(part) if isinstance(part, QWidget) else field.addLayout(part)
+            label = QLabel(title + ":")
+            label.setToolTip(tip)
+            form.addRow(label, field)
+            for part in parts:
+                if isinstance(part, QWidget):
+                    part.setToolTip(part.toolTip() or tip)
 
         self.run_button = QPushButton("Run the analysis")
         self.run_button.setStyleSheet("font-weight: bold; padding: 6px 14px;")
+        self.run_button.setToolTip("Measure the folders that are new or changed, then write both Excel files.")
         self.run_button.clicked.connect(self.start)
         self.cancel_button = QPushButton("Stop")
         self.cancel_button.setToolTip("Stop after the recording being measured. The folders measured so far are kept.")
         self.cancel_button.clicked.connect(self.cancel)
         self.cancel_button.hide()
-        self.write_button = QPushButton("Write the tables")
-        self.write_button.setToolTip("Write both Excel files again from the results kept in the output folder, with the "
-                                     "labels and groups shown now. Nothing is measured.")
+        self.write_button = QPushButton("Rewrite the tables")
+        self.write_button.setToolTip("Write both Excel files again with the labels and groups shown now. Nothing is measured.")
         self.write_button.clicked.connect(lambda: self.write_tables())
         self.open_button = QPushButton("Open the output folder")
         self.open_button.clicked.connect(self.open_output)
@@ -191,41 +205,24 @@ class AnalysisWindow(QMainWindow):
         self.status.setWordWrap(True)
         self.status.setTextInteractionFlags(Qt.TextSelectableByMouse)
 
-        steps = QWidget()
-        layout = QVBoxLayout(steps)
-        layout.addWidget(self._step("1.  ROI file", "The roi_selections.json made by ROI Selection. Its folders are "
-                                    "measured, each with its ROI and electrode; flagged recordings are left out.",
-                                    self.roi_input, self.roi_info, self.filter, self.folder_count))
-        layout.addWidget(self._step("2.  Protocol", "What is measured, as set in the Evoked Analysis Configurator.",
-                                    protocol_row, self.protocol_info, self.protocol_problems))
-        layout.addWidget(self._step("3.  Output folder", f"The two Excel files ({PER_RECORDING}, {PER_SLICE}) and "
-                                    f"{FILE_NAME}, which keeps the results so that a new run measures only what is "
-                                    "new. Nothing is ever written into the recordings.", self.output, self.output_info))
-        layout.addWidget(self._step("4.  Groups in the tables", "Slices are grouped by the values of the ticked labels, "
-                                    "such as WT CTRL and HET CTRL: one group of columns each in the Prism sheets.",
-                                    self.group_list, rows_row))
-        layout.addStretch()
-        self.settings_panel = steps
-        scroll = QScrollArea()
-        scroll.setWidget(steps)
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.settings_panel = QWidget()
+        self.settings_panel.setLayout(form)
         left = QWidget()
-        left.setMinimumWidth(480)
+        left.setMinimumWidth(460)
         left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.addWidget(scroll, 1)
+        left_layout.addWidget(self.settings_panel)
+        left_layout.addSpacing(8)
         left_layout.addLayout(buttons)
         left_layout.addWidget(self.progress)
         left_layout.addWidget(self.status)
+        left_layout.addStretch()
 
         self.folders_table = QTableWidget(0, 1)
         self.folders_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.folders_table.verticalHeader().setVisible(False)
-        self.folders_table.setSortingEnabled(False)
         folders_page = QWidget()
         folders_layout = QVBoxLayout(folders_page)
-        self.folders_hint = _hint()
+        self.folders_hint = _grey()
         folders_layout.addWidget(self.folders_hint)
         folders_layout.addWidget(self.folders_table, 1)
         self.labels_editor = LabelsEditor()
@@ -233,7 +230,7 @@ class AnalysisWindow(QMainWindow):
         self.near_misses = NearMissList()
         self.near_misses.changed.connect(self.near_miss_applied)
         self.tabs = QTabWidget()
-        self.tabs.addTab(folders_page, "Folders and their labels")
+        self.tabs.addTab(folders_page, "Folders")
         self.tabs.addTab(self.labels_editor, "Labels")
         self.tabs.addTab(self.near_misses, "Near misses")
 
@@ -241,21 +238,10 @@ class AnalysisWindow(QMainWindow):
         splitter.addWidget(left)
         splitter.addWidget(self.tabs)
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes([520, 880])
+        splitter.setSizes([500, 900])
         self.setCentralWidget(splitter)
         screen = QApplication.primaryScreen().availableGeometry()
-        self.resize(min(1400, screen.width() - 40), min(860, screen.height() - 60))
-
-    def _step(self, title, explanation, *parts):
-        box = QGroupBox(title)
-        layout = QVBoxLayout(box)
-        layout.addWidget(_hint(explanation))
-        for part in parts:
-            if isinstance(part, QWidget):
-                layout.addWidget(part)
-            else:
-                layout.addLayout(part)
-        return box
+        self.resize(min(1400, screen.width() - 40), min(760, screen.height() - 60))
 
     def _restore(self):
         """Start where the user left off: the last ROI file, protocol and output folder."""
@@ -277,21 +263,16 @@ class AnalysisWindow(QMainWindow):
     def load_roi_file(self):
         path = self.roi_input.file()
         self.selections = None
-        if path is None:
-            self.roi_info.setText("")
-        elif not path.is_file():
+        self.roi_info.setToolTip("")
+        if path is not None and not path.is_file():
             self.roi_info.setText("⚠ There is no such file.")
-        else:
+        elif path is not None:
             try:
                 self.selections = Selections.load(path)
             except (OSError, ValueError, KeyError) as error:
                 self.roi_info.setText(f"⚠ {error}")
             else:
-                folders = self.selections.folders
-                reviewed = sum(s.reviewed for s in folders.values())
-                self.roi_info.setText(f"Recordings folder: {_short(self.selections.recordings_folder)}\n"
-                                      f"{len(folders)} folders with an ROI, {reviewed} of them reviewed.")
-                self.roi_info.setToolTip(str(self.selections.recordings_folder))
+                self.roi_info.setToolTip(f"Recordings folder: {self.selections.recordings_folder}")
                 remember(evoked_analysis_roi_file=str(path))
         self.refresh_folders()
 
@@ -309,8 +290,10 @@ class AnalysisWindow(QMainWindow):
         """Show the folders to measure with their labels, and the near misses in their names."""
         names = self.folder_names()
         labels = self.analysis.labels
-        total = len(self.selections.folders) if self.selections else 0
-        self.folder_count.setText(f"{len(names)} of {total} folders will be measured." if self.selections else "")
+        if self.selections is not None:
+            folders = self.selections.folders
+            reviewed = sum(folders[name].reviewed for name in names)
+            self.roi_info.setText(f"{len(names)} of {len(folders)} folders will be measured; {reviewed} of them reviewed.")
         columns = ["Folder", *labels.names()]
         table = self.folders_table
         table.setRowCount(0)
@@ -336,25 +319,26 @@ class AnalysisWindow(QMainWindow):
                     missing += 1
                 table.setItem(row, column, item)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.folders_hint.setText(
-            "The labels read from each folder's names. Red: not found (the cell stays empty in the tables). "
-            "Orange: two folder names disagree, or one holds two values; hover to see. Change the spellings on the "
-            f"Labels tab. {missing} not found, {noted} to check." if names else
-            "Choose an ROI file to see its folders and the labels read from their names.")
+        if not names:
+            hint = "Choose an ROI file to see its folders and their labels."
+        elif missing or noted:
+            hint = "Red: not found in the folder names. Orange: to check (hover over it)."
+        else:
+            hint = "Every label was found."
+        self.folders_hint.setText(hint)
         parts = {name: labels.parts(name, recordings_folder) for name in names}
         misses = labels.near_misses(parts)
         self.near_misses.show_misses(labels, misses)
+        self.tabs.setTabText(0, f"Folders ({len(names)})" if names else "Folders")
         self.tabs.setTabText(2, f"Near misses ({len(misses)})" if misses else "Near misses")
-        self.tabs.setTabText(0, f"Folders and their labels ({len(names)})")
 
     # ------------------------------------------------------------------
     # Protocol
     # ------------------------------------------------------------------
 
     def fill_protocols(self, chosen=""):
-        self.entries = library.entries(self.user_folder)
         self.protocol_box.clear()
-        for entry in self.entries:
+        for entry in library.entries(self.user_folder):
             self.protocol_box.addItem(entry.label, str(entry.path))
         if chosen and self.protocol_box.findData(chosen) < 0 and Path(chosen).is_file():
             self.protocol_box.addItem(f"{Path(chosen).stem}  (file)", chosen)
@@ -373,27 +357,26 @@ class AnalysisWindow(QMainWindow):
     def choose_protocol(self, *_):
         path = self.protocol_box.currentData()
         self.protocol, self.protocol_path = None, None
+        self.protocol_info.setToolTip("")
         if not path:
             self.protocol_info.setText("")
             return
         try:
             self.protocol = Protocol.load(path)
         except (OSError, ProtocolError, ValueError, KeyError) as error:
-            self.protocol_info.setText("")
-            self.protocol_problems.setText(f"<span style='color:#c1121f'>⚠ {error}</span>")
-            self.protocol_problems.show()
+            self.protocol_info.setText(f"<span style='{ERROR}'>⚠ {error}</span>")
             return
         self.protocol_path = path
         remember(evoked_analysis_protocol=path)
-        per_slice = sum(m.per == "slice" for m in self.protocol.measures())
-        per_recording = sum(m.per == "recording" for m in self.protocol.measures())
-        self.protocol_info.setText(f"{self.protocol.description}\n{per_recording} measures per recording, {per_slice} per slice.")
+        measures = self.protocol.measures()
+        per_slice = sum(m.per == "slice" for m in measures)
+        text = f"{len(measures) - per_slice} measures per recording, {per_slice} per slice."
         problems = self.protocol.problems()
         if not per_slice:
-            problems.append("It has no per-slice measures, so the per-slice file will only list the slices. "
-                            "Choose them in the configurator, under Comparisons and summary.")
-        self.protocol_problems.setText("<br>".join(f"<span style='color:#c1121f'>⚠ {p}</span>" for p in problems))
-        self.protocol_problems.setVisible(bool(problems))
+            problems.append("No per-slice measures: the per-slice file will only list the slices.")
+        text += "".join(f"<br><span style='{ERROR}'>⚠ {problem}</span>" for problem in problems)
+        self.protocol_info.setText(text)
+        self.protocol_info.setToolTip(self.protocol.description)
         self.show_output_info()
 
     # ------------------------------------------------------------------
@@ -411,7 +394,7 @@ class AnalysisWindow(QMainWindow):
                 self.analysis = Analysis.load(folder / FILE_NAME)
             except (OSError, ValueError, KeyError) as error:
                 self.analysis = Analysis(folder, labels=self.analysis.labels)
-                self.output_info.setText(f"⚠ The {FILE_NAME} there cannot be read: {error}")
+                self.output_info.setText(f"<span style='{ERROR}'>⚠ Its {FILE_NAME} cannot be read: {error}</span>")
                 return
         else:
             self.analysis = Analysis(folder, labels=self.analysis.labels, only_folders_with=self.analysis.only_folders_with,
@@ -431,15 +414,12 @@ class AnalysisWindow(QMainWindow):
         if analysis.folder is None:
             text = ""
         elif not analysis.folders:
-            text = "A new analysis: every folder will be measured."
+            text = "New: every folder will be measured."
         elif self.protocol is not None and not analysis.is_current(self.protocol):
-            old = analysis.protocol_object().name if analysis.protocol else "?"
-            text = (f"<span style='color:#b35c00'>Holds the results of {_folders(measured)}, measured with "
-                    f"<b>{old}</b> as it was then (or with another version of EMA). The protocol chosen differs, so "
-                    "every folder will be measured again and both files replaced.</span>")
+            text = (f"<span style='{WARNING}'>{_folders(measured)} measured with another protocol: everything will be "
+                    "measured again.</span>")
         else:
-            text = (f"Holds the results of {_folders(measured)}, measured with this protocol. A run measures only "
-                    "folders that are new or changed and adds them; the others keep their results.")
+            text = f"{_folders(measured)} measured before: only new or changed folders will be measured."
         self.output_info.setText(text)
         self.write_button.setEnabled(bool(analysis.folders))
 
@@ -448,25 +428,24 @@ class AnalysisWindow(QMainWindow):
         self.fill_groups()
 
     def fill_groups(self):
-        names = self.analysis.labels.names()
-        self.group_list.blockSignals(True)
-        self.group_list.clear()
-        for name in names:
-            item = QListWidgetItem(name)
-            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-            item.setCheckState(Qt.Checked if name in self.analysis.group_by else Qt.Unchecked)
-            self.group_list.addItem(item)
-        self.group_list.blockSignals(False)
+        """A tick box per label for the groups, and the choices of rows for the per-slice sheets."""
+        while self.groups_grid.count():
+            self.groups_grid.takeAt(0).widget().deleteLater()
+        self.group_boxes = {}
+        for n, name in enumerate(self.analysis.labels.names()):
+            box = QCheckBox(name)
+            box.setChecked(name in self.analysis.group_by)
+            box.toggled.connect(self.grouping_changed)
+            self.groups_grid.addWidget(box, n // 4, n % 4)
+            self.group_boxes[name] = box
         self.rows_box.clear()
-        self.rows_box.addItem("none: a column table, one column per group", "")
-        for name in names:
-            self.rows_box.addItem(f"{name}: a grouped table, one row per {name}", name)
+        self.rows_box.addItem("One column per group", "")
+        for name in self.analysis.labels.names():
+            self.rows_box.addItem(f"One row per {name}", name)
         self.rows_box.setCurrentIndex(max(self.rows_box.findData(self.analysis.slice_rows_by), 0))
 
     def grouping_changed(self, *_):
-        group_by = [self.group_list.item(i).text() for i in range(self.group_list.count())
-                    if self.group_list.item(i).checkState() == Qt.Checked]
-        self.analysis.group_by = group_by
+        self.analysis.group_by = [name for name, box in self.group_boxes.items() if box.isChecked()]
         self.analysis.slice_rows_by = self.rows_box.currentData() or ""
 
     def labels_changed(self):
@@ -584,27 +563,22 @@ class AnalysisWindow(QMainWindow):
         worker, self.worker = self.worker, None
         self.set_running(False)
         if worker.error is not None:
-            self.status.setText(f"<span style='color:#c1121f'>⚠ The analysis stopped: {worker.error}</span>")
+            self.status.setText(f"<span style='{ERROR}'>⚠ The analysis stopped: {worker.error}</span>")
             return
         the_plan = worker.args[3]
         self.analysis.save()
-        stopped = worker.stop
         measured = [path.as_posix() for path, _, _ in the_plan.to_measure if path.as_posix() in self.analysis.folders]
         recordings = sum(len(self.analysis.folders[key].recordings) for key in measured)
         skipped = sum(len(self.analysis.folders[key].skipped) for key in measured)
         minutes, seconds = divmod(round(time.monotonic() - self.started), 60)
-        lines = [f"{'Stopped' if stopped else 'Done'}: {_folders(len(measured))} measured ({recordings} recordings) in "
-                 f"{minutes} min {seconds} s."]
-        if the_plan.unchanged:
-            lines.append(f"{_folders(len(the_plan.unchanged))} unchanged: their results were kept.")
-        if the_plan.kept_others and worker.keep_others:
-            lines.append(f"{_folders(len(the_plan.kept_others))} from earlier runs, not in this ROI file, kept.")
-        if the_plan.missing:
-            lines.append(f"⚠ {_folders(len(the_plan.missing))} of the ROI file not on this computer.")
+        lines = [f"{'Stopped' if worker.stop else 'Done'} in {minutes} min {seconds} s: {_folders(len(measured))} "
+                 f"measured ({recordings} recordings), {len(the_plan.unchanged)} unchanged."]
         if skipped:
-            lines.append(f"{skipped} recordings were not measured; the Notes sheets say why.")
-        if stopped:
-            lines.append("Run again to measure the rest; what was measured is kept.")
+            lines.append(f"{skipped} recordings not measured: see the Notes sheet.")
+        if the_plan.missing:
+            lines.append(f"⚠ {_folders(len(the_plan.missing))} of the ROI file not found on this computer.")
+        if worker.stop:
+            lines.append("Run again to measure the rest.")
         self.status.setText("\n".join(lines))
         self.show_output_info()
         self.write_tables(quiet=True)
@@ -614,16 +588,14 @@ class AnalysisWindow(QMainWindow):
             return
         try:
             self.analysis.save()
-            paths = write_workbooks(self.analysis)
+            write_workbooks(self.analysis)
         except TablesLocked as error:
             QMessageBox.warning(self, "Close the file in Excel", str(error))
             return
         except OSError as error:
             QMessageBox.warning(self, "The tables could not be written", str(error))
             return
-        written = " and ".join(path.name for path in paths)
-        text = self.status.text() + f"\n{written} written." if quiet else f"{written} written."
-        self.status.setText(text.strip())
+        self.status.setText((self.status.text() + "\n" if quiet else "") + "Tables written.")
 
     def open_output(self):
         folder = self.output.folder()

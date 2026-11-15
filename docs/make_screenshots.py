@@ -7,6 +7,7 @@ screenshots are saved in docs/screenshots.
 """
 
 import os
+import shutil
 import sys
 import tempfile
 from datetime import datetime
@@ -28,6 +29,7 @@ app.setFont(QFont("Segoe UI", 9))
 from ema import user_settings
 from ema.evoked.metrics import KINETIC_KEYS, SPATIAL_KEYS
 from ema.evoked.template import LIKE
+from ema.evoked.workbook import PER_RECORDING, PER_SLICE
 from ema.evoked_analysis.window import AnalysisWindow
 from ema.evoked_configurator.pulse_dialog import PlacePulsesDialog
 from ema.evoked_configurator.template_dialog import TemplateDialog
@@ -174,21 +176,27 @@ def configurator_screenshots(recordings, output):
     window.close()
 
 
+# The made-up study of the Evoked Analysis screenshots and example tables: two slices per group, one folder
+# misspelt ('Contrl'). Each entry: folder, size of the response, paired-pulse ratio.
 DEMO_FOLDERS = [
-    "Females/LKI HET F5819/CTRL 2HR/Slice 1/input output",
-    "Females/LKI HET F5819/IFNy 2HR/Slice 2/input output",
-    "Females/LKI HET F5774/IFN 4HR/slice4/input output",
-    "Males/LKI WT M5820/CTRL 2HR/Slice 1/input output",
-    "Males/LKI WT M5820/IFN 2H/Slice 3/input output",
-    "Males/LKI WT M5770/Contrl 4HR/Slice 2/input output",
+    ("Males/LKI WT M5820/CTRL 2HR/Slice 1/input output", 1.0, 0.55),
+    ("Males/LKI WT M5770/Contrl 2HR/Slice 2/input output", 0.85, 0.6),
+    ("Males/LKI WT M5820/IFN 2H/Slice 3/input output", 1.3, 0.45),
+    ("Males/LKI WT M5770/IFNy 2HR/Slice 1/input output", 1.15, 0.4),
+    ("Females/LKI HET F5819/CTRL 2HR/Slice 1/input output", 0.6, 0.6),
+    ("Females/LKI HET F5774/CTRL 2HR/slice3/input output", 0.7, 0.65),
+    ("Females/LKI HET F5819/IFNy 2HR/Slice 2/input output", 0.8, 0.5),
+    ("Females/LKI HET F5774/IFN 2H/Slice 4/input output", 0.9, 0.45),
 ]
+DEMO_CURRENTS = [50, 100, 200, 300, 400]
+EXAMPLES = DOCS / "examples"
 
 
-def demo_movie(path, response, clock, seed):
-    """A small movie with two responses at the 2P stimulus frames, for the window screenshots."""
+def demo_movie(path, response, ppr, clock, seed):
+    """A small movie with two responses at the 2P stimulus frames."""
     rng = np.random.default_rng(seed)
     frames = np.arange(1301) - 1
-    course = sum(np.where(frames >= s, size * np.exp(-(frames - s) / 35.0), 0.0) for s, size in ((103, 1.0), (928, 0.6)))
+    course = sum(np.where(frames >= s, size * np.exp(-(frames - s) / 60.0), 0.0) for s, size in ((103, 1.0), (928, ppr)))
     y, x = np.indices((32, 32))
     spot = np.exp(-((x - 16) ** 2 + (y - 16) ** 2) / 50.0)
     movie = 500 * (1 + response * course[:, None, None] * spot) * np.exp(-frames / 20000)[:, None, None]
@@ -198,15 +206,17 @@ def demo_movie(path, response, clock, seed):
 
 
 def demo_study(root):
-    """Six recording folders named like the lab's, with their ROI file. Nothing real is read or written."""
+    """Eight recording folders named like the lab's, with their ROI file. Nothing real is read or written."""
     settings = RoiSettings()
     selections = Selections(root, settings)
-    for n, name in enumerate(DEMO_FOLDERS):
+    rng = np.random.default_rng(1)
+    for n, (name, size, ppr) in enumerate(DEMO_FOLDERS):
         folder = root / name
         folder.mkdir(parents=True)
-        for k, (file, response) in enumerate((("100uA.tif", 0.15), ("no1.tif", 0), ("200uA.tif", 0.3), ("no2.tif", 0),
-                                              ("300uA.tif", 0.4), ("no3.tif", 0))):
-            demo_movie(folder / file, response * (1 + 0.15 * n), f"10:0{k}:00", 10 * n + k)
+        for k, current in enumerate(DEMO_CURRENTS):
+            response = 5.0 * size * current**1.5 / (150**1.5 + current**1.5) * rng.uniform(0.9, 1.1)
+            demo_movie(folder / f"{current}uA.tif", response, ppr * rng.uniform(0.85, 1.15), f"10:{2 * k:02d}:00", 20 * n + k)
+            demo_movie(folder / f"no{k + 1}.tif", 0.0, 0.0, f"10:{2 * k + 1:02d}:00", 20 * n + 10 + k)
         selections.folders[name] = FolderSelection((32, 32), (16, 16), settings.roi_radius_px, np.zeros((32, 32), bool),
                                                    reviewed=True)
     selections.save(root.parent / "roi_selections.json")
@@ -214,16 +224,16 @@ def demo_study(root):
 
 
 def analysis_screenshots(output):
+    """The Evoked Analysis window at each step, and the two Excel files of the demo study as examples."""
     roi_file = demo_study(output / "demo" / "recordings")
     window = AnalysisWindow(user_folder=output / "protocols")
-    window.resize(1400, 820)
+    window.resize(1400, 760)
     window.roi_input.path.setText(str(roi_file))
     window.load_roi_file()
     window.output.path.setText(str(output / "demo" / "Evoked 2P"))
     window.output_changed()
     window.roi_input.path.setText("C:/Users/you/EMA results/roi_selections.json")
     window.output.path.setText("C:/Users/you/EMA results/Evoked 2P")
-    window.roi_info.setText("Recordings folder: C:/Users/you/Recordings\n6 folders with an ROI, 6 of them reviewed.")
     window.filter.only_with.setText("input output")
     window.show()
     save(window, "analysis.png")
@@ -241,6 +251,10 @@ def analysis_screenshots(output):
     window.output.path.setText("C:/Users/you/EMA results/Evoked 2P")
     save(window, "analysis_done.png")
     window.close()
+    EXAMPLES.mkdir(exist_ok=True)
+    for name in (PER_RECORDING, PER_SLICE):
+        shutil.copyfile(output / "demo" / "Evoked 2P" / name, EXAMPLES / ("Example - " + name))
+        print("saved Example -", name)
 
 
 if __name__ == "__main__":

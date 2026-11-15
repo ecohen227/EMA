@@ -22,7 +22,7 @@ An example, the built-in 2P protocol:
        "measure": "every stimulated recording",
        "unstimulated_partner": "recorded right after",
        "condition": {"name": "Current", "unit": "µA"},
-       "skip_words": ["red"],
+       "skip_words": ["red", "test"],
        "windows_follow_condition": false,
        "list": []
      },

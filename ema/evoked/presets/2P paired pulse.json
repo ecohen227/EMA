@@ -12,7 +12,7 @@
       "name": "Current",
       "unit": "µA"
     },
-    "skip_words": ["red"],
+    "skip_words": ["red", "test"],
     "windows_follow_condition": false,
     "list": []
   },
@@ -73,12 +73,14 @@
       "near_to_um": 160.0,
       "far_from_um": 400.0,
       "far_to_um": 640.0,
-      "exclude_electrode": true
+      "exclude_electrode": true,
+      "follow_ms": 1500.0
     }
   },
   "slice_summary": {
     "statistics": ["min", "max", "mean"],
     "condition_range": [100.0, 400.0],
-    "baseline_spread": true
+    "baseline_spread": true,
+    "condition_fits": []
   }
 }

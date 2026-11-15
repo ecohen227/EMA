@@ -150,12 +150,11 @@ def _per_recording(analysis, protocol, slices):
     width = max((len(members) for members in groups.values()), default=1)
     rows = _condition_rows(slices)
     for item in slices:
-        notes += _duplicate_notes(item)
+        notes += _row_notes(item, _with_conditions(slices))
     for measure in measures:
         sheet = workbook.create_sheet(names[measure.name])
-        _title(sheet, _heading(measure), f"Prism: grouped table, {width} replicate values in side-by-side subcolumns, each "
-               "subcolumn one slice. Copy from the first condition in column A down to the last value, and paste it into "
-               "the first row title. Group titles are in row 3, slice names in row 4.")
+        _title(sheet, _heading(measure), f"Prism: Grouped table, {width} replicates side by side. Copy from A5 to the "
+               "last value; paste at the first row title.")
         top = ["" for _ in range(1 + width * len(groups))]
         names_row = [protocol.condition_label] + [""] * (width * len(groups))
         for g, (group, members) in enumerate(groups.items()):
@@ -213,8 +212,7 @@ def _per_slice(analysis, protocol, slices):
 
 
 def _column_table(sheet, measure, groups):
-    _title(sheet, _heading(measure), "Prism: column table, one column per group. Copy from row 4 down and paste it into "
-           "the first value of the first column. Column titles are in row 3.")
+    _title(sheet, _heading(measure), "Prism: Column table. Copy from A4 to the last value; paste at the first value.")
     sheet.append(list(groups))
     columns = [[_cell(m.result.summary.get(measure.name)) for m in members] for members in groups.values()]
     for i in range(max((len(c) for c in columns), default=0)):
@@ -226,9 +224,8 @@ def _column_table(sheet, measure, groups):
 def _grouped_by_label(sheet, measure, groups, label, slices):
     values = sorted({s.labels[label.name] for s in slices}, key=label.sort_key)
     width = max((sum(m.labels[label.name] == v for m in members) for members in groups.values() for v in values), default=1)
-    _title(sheet, _heading(measure), f"Prism: grouped table, {width} replicate values in side-by-side subcolumns. Copy "
-           f"from the first {label.name} in column A down to the last value, and paste it into the first row title. Group "
-           "titles are in row 3.")
+    _title(sheet, _heading(measure), f"Prism: Grouped table, {width} replicates side by side. Copy from A5 to the "
+           "last value; paste at the first row title.")
     top = [""] * (1 + width * len(groups))
     for g, group in enumerate(groups):
         top[1 + g * width] = group
@@ -254,31 +251,46 @@ def _row_key(recording):
 
 
 def _ordered(recordings):
-    """Recordings by condition (those without one by file name, after)."""
-    return sorted(recordings, key=lambda r: (r.condition is None, r.condition or 0, r.file.lower()))
+    """Recordings by condition (those without one after); with the same condition, the plainest name first.
+
+    The plainest name is the shortest, so 200uA.tif comes before
+    '200uA test pulse.tif' and 50uA.tif before '50uA (2).tif'.
+    """
+    return sorted(recordings, key=lambda r: (r.condition is None, r.condition or 0, len(Path(r.file).stem), r.file.lower()))
+
+
+def _with_conditions(slices):
+    """True when any recording has a condition: the rows of the measure sheets are then the conditions only."""
+    return any(r.condition is not None for s in slices for r in s.result.recordings)
 
 
 def _condition_rows(slices):
-    """(row key, row title) of every condition (or file name, without a condition) of any slice, in order."""
-    keys = {_row_key(r) for s in slices for r in s.result.recordings}
-    numbers = sorted(k for k in keys if not isinstance(k, str))
-    names = sorted((k for k in keys if isinstance(k, str)), key=str.lower)
-    return [(k, k) for k in numbers] + [(k, k) for k in names]
+    """(row key, row title) of every condition of any slice, in order; file names when no recording has a condition."""
+    if _with_conditions(slices):
+        keys = sorted({r.condition for s in slices for r in s.result.recordings if r.condition is not None})
+    else:
+        keys = sorted({r.file for s in slices for r in s.result.recordings}, key=str.lower)
+    return [(k, k) for k in keys]
 
 
 def _value_at(item, row_key, name):
-    """The value of a measure in a slice's first recording with this condition."""
+    """The value of a measure in the slice's recording for this row (the plainest name, if several)."""
     recording = next((r for r in _ordered(item.result.recordings) if _row_key(r) == row_key), None)
     return None if recording is None else recording.values.get(name)
 
 
-def _duplicate_notes(item):
+def _row_notes(item, with_conditions):
+    """Notes on the recordings of a slice that are not on the measure sheets."""
     notes, seen = [], {}
     for recording in _ordered(item.result.recordings):
         key = _row_key(recording)
-        if key in seen:
+        if with_conditions and recording.condition is None:
+            notes.append([item.result.name, recording.file, "Has no condition (its name does not start with a number), so "
+                          "it is on the Recordings sheet only."])
+        elif key in seen:
             notes.append([item.result.name, recording.file, f"Has the same condition as {seen[key]}, so the measure sheets "
-                          f"show {seen[key]} only (both are on the Recordings sheet)."])
+                          f"show {seen[key]} only (both are on the Recordings sheet). To use this one instead, flag "
+                          f"{seen[key]} in ROI Selection."])
         else:
             seen[key] = recording.file
     return notes

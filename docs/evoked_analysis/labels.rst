@@ -63,11 +63,10 @@ out**: for ``Females/LKI HET F5819/IFNy 4HR/Slice 2/input output``, first
 example the labels are LKI, HET, IFN, 4H, F, 5819 and 2.
 
 Only the folders inside the recordings folder of the ROI file are read,
-unless **Also read the recordings folder and the folders above it** is
-ticked. Tick it when a label is only in the name of the recordings folder
+unless **Also read the folders above the recordings folder** is ticked. Tick it when a label is only in the name of the recordings folder
 itself, for example when the ROI file was made for one animal's folder.
 
-The table on the **Folders and their labels** tab shows the value of every
+The table on the **Folders** tab shows the value of every
 label for every folder:
 
 * **Red**: the label was not found. Its cell stays empty in the tables, and
@@ -144,17 +143,16 @@ Changing the labels
 
 On the **Labels** tab:
 
-* **Add label** adds a label with one value; **Add number label** adds a
-  number label; **Add value** adds a value to the selected label.
+* **Add** adds a label (with one value), a number label, or a value of the
+  selected label.
 * Double-click a name, a value or a list of spellings to change it.
   Spellings are separated by commas.
 * **Remove**, ▲ and ▼ remove and move the selected label or value. The
   order of the values is the order of the groups in the tables (WT before
   HET).
-* **Restore defaults** brings back the labels above.
-* **Export…** saves the labels in a file, to share them; **Import…** reads
-  such a file, or the labels of another analysis (its
-  ``evoked_analysis.json``).
+* **More** holds *Restore the defaults* (the labels above), *Export…* (save
+  the labels in a file, to share them) and *Import…* (read such a file, or
+  the labels of another analysis from its ``evoked_analysis.json``).
 
 The labels are kept with the analysis in its output folder, and EMA starts
 the next new analysis with the labels last used.
