@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ema"
+version = "3.0.0a1"
+description = "Analysis of electrically stimulated brain-slice recordings"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.22",
+    "scipy>=1.8",
+    "tifffile>=2022.2",
+    "matplotlib>=3.6",
+    "PyQt5>=5.15",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "sphinx>=7", "furo"]
+
+[project.gui-scripts]
+ema = "ema.app:main"
+
+[tool.setuptools]
+packages = ["ema", "ema.roi_selection"]
+
+[tool.setuptools.package-data]
+ema = ["assets/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
