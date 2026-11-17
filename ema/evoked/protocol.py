@@ -23,7 +23,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .metrics import KINETIC, KINETIC_KEYS, NEAR_TO_FAR, SPATIAL, SPATIAL_KEYS, SpatialSettings
+from ..recordings import FRAME_MS, has_skip_word, is_no_stim
+from .catalogue import KINETIC, KINETIC_KEYS, NEAR_TO_FAR, SPATIAL, SPATIAL_KEYS, SpatialSettings
 
 FORMAT = "EMA evoked protocol"
 FORMAT_VERSION = 1
@@ -160,7 +161,7 @@ class ConditionFit:
 
 
 @dataclass
-class Measure:
+class Column:
     """One number the analysis will produce: per recording, or per slice (a summary of the recordings)."""
 
     name: str
@@ -173,7 +174,7 @@ class Measure:
 class Protocol:
     name: str
     description: str = ""
-    sampling_interval_ms: float = 4.849
+    sampling_interval_ms: float = FRAME_MS
     trace: str = BRIGHTNESS
     partner: str = RECORDED_AFTER
     selection: str = EVERY
@@ -186,10 +187,10 @@ class Protocol:
     comparisons: list = field(default_factory=list)
     fits: list = field(default_factory=list)
     windows_follow_condition: bool = False  # per-recording windows move when a recording's delay is changed
-    kinetic_measures: list = field(default_factory=list)  # keys of metrics.KINETIC
+    kinetic_measures: list = field(default_factory=list)  # keys of catalogue.KINETIC
     kinetic_pulses: list = None  # the pulses they are measured on; None means every pulse
     kinetic_smoothing_frames: int = 3
-    spatial_measures: list = field(default_factory=list)  # keys of metrics.SPATIAL
+    spatial_measures: list = field(default_factory=list)  # keys of catalogue.SPATIAL
     spatial_pulses: list = field(default_factory=lambda: ["P1"])
     near_to_far: list = field(default_factory=list)  # names of comparisons also measured as near-to-far indices
     spatial: SpatialSettings = field(default_factory=SpatialSettings)
@@ -231,15 +232,14 @@ class Protocol:
 
     def measured_files(self, paths):
         """The recordings of a folder that are measured with EVERY: all stimulated ones but the skipped."""
-        return [path for path in paths if not _is_unstimulated(path) and not self.skipped(path)]
+        return [path for path in paths if not is_no_stim(path) and not self.skipped(path)]
 
     def unstimulated_files(self, paths):
         """The recordings of a folder that can be an unstimulated partner: named 'no' and a number, not skipped."""
-        return [path for path in paths if _is_unstimulated(path) and not self.skipped(path)]
+        return [path for path in paths if is_no_stim(path) and not self.skipped(path)]
 
     def skipped(self, path):
-        skip = {word.lower() for word in self.skip_words}
-        return bool(skip & set(re.split(r"[\s_\-]+", Path(path).stem.lower())))
+        return has_skip_word(path, self.skip_words)
 
     @property
     def uses_partner(self):
@@ -350,10 +350,14 @@ class Protocol:
         self.spatial_pulses = [new if n == old else n for n in self.spatial_pulses]
         self.near_to_far = [new if n == old else n for n in self.near_to_far]
 
+    def names(self):
+        """Every name the user gives: windows, pulses, comparisons and fits (each must be unique)."""
+        names = list(self.baselines) + [p.name for p in self.pulses] + [c.name for c in self.comparisons]
+        return names + [name for fit in self.fits for name in fit.measure_names()] + [f.name for f in self.condition_fits]
+
     def new_name(self, prefix):
         """The first free name prefix1, prefix2, …"""
-        taken = set(self.baselines) | {p.name for p in self.pulses} | {c.name for c in self.comparisons}
-        taken |= {name for fit in self.fits for name in fit.measure_names()} | {f.name for f in self.condition_fits}
+        taken = set(self.names())
         number = 1
         while f"{prefix}{number}" in taken:
             number += 1
@@ -431,29 +435,29 @@ class Protocol:
         per_recording = []
         for name, window in self.baselines.items():
             where = "set for each recording" if window == PER_RECORDING else window.text()
-            per_recording.append(Measure(name, self.trace_unit, f"Mean of the trace over the baseline window ({where})."))
+            per_recording.append(Column(name, self.trace_unit, f"Mean of the trace over the baseline window ({where})."))
 
         for pulse in self.pulses:
             where = "set for each recording" if pulse.per_recording else pulse.peak.text() if pulse.peak else "not set"
-            per_recording.append(Measure(pulse.name, self.trace_unit, f"Maximum of the trace over the peak window ({where})."))
-            per_recording.append(Measure(f"{pulse.name} response", "%", self.response_explanation(pulse)))
+            per_recording.append(Column(pulse.name, self.trace_unit, f"Maximum of the trace over the peak window ({where})."))
+            per_recording.append(Column(f"{pulse.name} response", "%", self.response_explanation(pulse)))
 
         for metric, pulse in self._chosen(KINETIC, self.kinetic_measures, self.kinetic_pulse_names()):
-            per_recording.append(Measure(f"{pulse} {metric.key}", metric.unit, metric.explanation.format(pulse=pulse)))
+            per_recording.append(Column(f"{pulse} {metric.key}", metric.unit, metric.explanation.format(pulse=pulse)))
         for metric, pulse in self._chosen(SPATIAL, self.spatial_measures, self.spatial_pulses):
-            per_recording.append(Measure(f"{pulse} {metric.key}", metric.unit, metric.explanation.format(pulse=pulse)))
+            per_recording.append(Column(f"{pulse} {metric.key}", metric.unit, metric.explanation.format(pulse=pulse)))
 
         for comparison in self.comparisons:
             times = " × 100" if comparison.scale == PERCENT_SCALE else ""
             per_recording.append(
-                Measure(
+                Column(
                     comparison.name,
                     "%" if comparison.scale == PERCENT_SCALE else "ratio",
                     f"{comparison.pulse} response ÷ {comparison.relative_to} response{times}.",
                 )
             )
             if comparison.name in self.near_to_far:
-                per_recording.append(Measure(f"{comparison.name} near-to-far", NEAR_TO_FAR.unit,
+                per_recording.append(Column(f"{comparison.name} near-to-far", NEAR_TO_FAR.unit,
                                              NEAR_TO_FAR.explanation.format(pulse=comparison.name)))
 
         for fit in self.fits:
@@ -462,13 +466,12 @@ class Protocol:
             where = f"fitted to the trace, starting {start}, for {fit.length} frames ({duration:.2f} s)"
             if fit.kind == DOUBLE:
                 formula = "A1·exp(−t/τ1) + A2·exp(−t/τ2) + C"
-                per_recording += [
-                    Measure(f"{fit.name} fast", "ms", f"The faster time constant τ1 of {formula} {where}."),
-                    Measure(f"{fit.name} slow", "ms", f"The slower time constant τ2 of {formula} {where}."),
-                    Measure(f"{fit.name} fast fraction", "fraction", f"A1 ÷ (A1 + A2): the share of the fast decay in {formula} {where}."),
-                ]
+                described = [("ms", f"The faster time constant τ1 of {formula} {where}."),
+                             ("ms", f"The slower time constant τ2 of {formula} {where}."),
+                             ("fraction", f"A1 ÷ (A1 + A2): the share of the fast decay in {formula} {where}.")]
             else:
-                per_recording.append(Measure(fit.name, "ms", f"Time constant τ of A·exp(−t/τ) + C {where}."))
+                described = [("ms", f"Time constant τ of A·exp(−t/τ) + C {where}.")]
+            per_recording += [Column(name, unit, text) for name, (unit, text) in zip(fit.measure_names(), described)]
         return per_recording + self._slice_measures(per_recording)
 
     def kinetic_pulse_names(self):
@@ -513,12 +516,12 @@ class Protocol:
         for measure in per_recording:
             for statistic in self.summary_statistics:
                 summary.append(
-                    Measure(f"{measure.name} {statistic}", measure.unit, f"The {statistic} of {measure.name} over the recordings of a slice.", "slice")
+                    Column(f"{measure.name} {statistic}", measure.unit, f"The {statistic} of {measure.name} over the recordings of a slice.", "slice")
                 )
             if self.summary_condition_range:
                 low, high = self.summary_condition_range
                 summary.append(
-                    Measure(
+                    Column(
                         f"{measure.name} mean {low:g}-{high:g}",
                         measure.unit,
                         f"The mean of {measure.name} over the recordings of a slice with a {condition} from {low:g} to {high:g}.",
@@ -528,7 +531,7 @@ class Protocol:
         if self.summary_baseline_spread:
             for name in self.baselines:
                 summary.append(
-                    Measure(
+                    Column(
                         f"{name} spread",
                         "%",
                         f"(largest {name} − smallest {name}) ÷ smallest {name} × 100 over the recordings of a slice: "
@@ -546,20 +549,17 @@ class Protocol:
         across = f"fitted by least squares to {fit.measure} against the {condition} of the recordings of a slice"
         if fit.model == SATURATION:
             curve = f"top·xⁿ ÷ (halfⁿ + xⁿ), x the {condition}, {across}"
-            return [
-                Measure(f"{fit.name} half-max", x_unit, f"half of {curve}: the {condition} at which the curve reaches half of its top.", "slice"),
-                Measure(f"{fit.name} max", unit, f"top of {curve}: the {fit.measure} the curve approaches at a large {condition}.", "slice"),
-                Measure(f"{fit.name} steepness", "Hill coefficient", f"n of {curve}.", "slice"),
-            ]
-        fixed = "" if fit.plateau is None else f", with the plateau fixed at {fit.plateau:g}"
-        curve = f"plateau − (plateau − start)·exp(−x/τ), x the {condition}, {across}{fixed}"
-        found = [
-            Measure(f"{fit.name} time constant", x_unit, f"τ of {curve}: the {condition} by which {fit.measure} has recovered 63 % of the way to the plateau.", "slice"),
-            Measure(f"{fit.name} start", unit, f"start of {curve}: the value of the curve at a {condition} of 0.", "slice"),
-        ]
-        if fit.plateau is None:
-            found.append(Measure(f"{fit.name} plateau", unit, f"plateau of {curve}: the value the curve approaches at a long {condition}.", "slice"))
-        return found
+            described = [(x_unit, f"half of {curve}: the {condition} at which the curve reaches half of its top."),
+                         (unit, f"top of {curve}: the {fit.measure} the curve approaches at a large {condition}."),
+                         ("Hill coefficient", f"n of {curve}.")]
+        else:
+            fixed = "" if fit.plateau is None else f", with the plateau fixed at {fit.plateau:g}"
+            curve = f"plateau − (plateau − start)·exp(−x/τ), x the {condition}, {across}{fixed}"
+            described = [(x_unit, f"τ of {curve}: the {condition} by which {fit.measure} has recovered 63 % of the way to "
+                                  "the plateau."),
+                         (unit, f"start of {curve}: the value of the curve at a {condition} of 0."),
+                         (unit, f"plateau of {curve}: the value the curve approaches at a long {condition}.")]
+        return [Column(name, unit, text, "slice") for name, (unit, text) in zip(fit.measure_names(), described)]
 
     # ------------------------------------------------------------------
     # Checks
@@ -571,18 +571,17 @@ class Protocol:
         if not self.name.strip():
             found.append("The protocol needs a name.")
         if not self.sampling_interval_ms > 0:
-            found.append("The frame interval must be more than 0 ms.")
+            found.append("The time between frames must be more than 0 ms.")
         if not self.pulses:
             found.append("The protocol needs at least one pulse.")
         if self.trace == RATIO and self.partner == NO_PARTNER:
             found.append("A stimulated ÷ unstimulated trace needs an unstimulated partner for each recording.")
         if self.partner == AS_LISTED and self.selection != LISTED:
-            found.append("Partners 'as listed' need a list of recordings with their unstimulated partners.")
+            found.append("Partners named in the list need a list of recordings, each with its unstimulated partner.")
         if self.trace == BRIGHTNESS and self.partner != NO_PARTNER and not self.baselines:
             found.append("The correction by the unstimulated partner needs a baseline window.")
 
-        names = list(self.baselines) + [p.name for p in self.pulses] + [c.name for c in self.comparisons]
-        names += [name for fit in self.fits for name in fit.measure_names()] + [f.name for f in self.condition_fits]
+        names = self.names()
         for name in sorted({n for n in names if names.count(n) > 1}):
             found.append(f"The name {name} is used twice. Every window, pulse, comparison and fit needs its own name.")
         if any(not name.strip() for name in names):
@@ -773,19 +772,16 @@ class Protocol:
 
     @classmethod
     def load(cls, path):
+        """Read a protocol file. Raises OSError, or ProtocolError when it is not a protocol or is damaged."""
         try:
             data = json.loads(Path(path).read_text(encoding="utf-8"))
-        except json.JSONDecodeError as error:
+        except ValueError as error:  # not JSON, or not UTF-8 text
             raise ProtocolError(f"{Path(path).name} is not a valid JSON file ({error}).") from error
         return cls.from_dict(data)
 
 # ---------------------------------------------------------------------------
 # Reading and writing the parts
 # ---------------------------------------------------------------------------
-
-
-def _is_unstimulated(path):
-    return bool(re.match(r"^no\s*\d", Path(path).name, re.IGNORECASE))
 
 
 def _old_partner(data):

@@ -6,7 +6,7 @@ from datetime import datetime
 import numpy as np
 import pytest
 
-from ema.evoked import library
+from ema.evoked.presets import LIBRARY
 from ema.evoked.presets import paired_pulse, paired_pulse_uncorrected, pulse_train
 from ema.evoked.protocol import (
     AS_LISTED,
@@ -33,7 +33,7 @@ def test_presets_are_complete_and_survive_a_file(tmp_path):
 
 
 def test_shipped_preset_files_match_the_code():
-    shipped = {entry.name: entry.load() for entry in library.entries(user_folder=None) if entry.built_in}
+    shipped = {entry.name: LIBRARY.load(entry.path) for entry in LIBRARY.entries() if entry.built_in}
     assert shipped == {"2P paired pulse": paired_pulse(), "2P paired pulse, uncorrected": paired_pulse_uncorrected(),
                        "11P pulse train": pulse_train()}
 
@@ -161,9 +161,9 @@ def test_library_lists_built_in_first_then_saved(tmp_path):
     for name in ("Zeta", "3P triple", "alpha"):
         protocol = paired_pulse()
         protocol.name = name
-        library.save(protocol, tmp_path)
+        LIBRARY.in_folder(tmp_path).save(protocol)
     (tmp_path / "broken.json").write_text("{")
-    labels = [entry.label for entry in library.entries(tmp_path)]
+    labels = [entry.label for entry in LIBRARY.in_folder(tmp_path).entries()]
     assert labels == ["2P paired pulse  (built in)", "2P paired pulse, uncorrected  (built in)", "11P pulse train  (built in)",
                       "3P triple", "alpha", "Zeta"]
 
@@ -171,18 +171,18 @@ def test_library_lists_built_in_first_then_saved(tmp_path):
 def test_saving_under_a_new_name_replaces_the_old_file(tmp_path):
     protocol = paired_pulse()
     protocol.name = "Mine"
-    first = library.save(protocol, tmp_path)
+    first = LIBRARY.in_folder(tmp_path).save(protocol)
     protocol.name = "Mine: renamed?"
-    second = library.save(protocol, tmp_path, replacing=first)
+    second = LIBRARY.in_folder(tmp_path).save(protocol, replacing=first)
     assert not first.exists() and second.name == "Mine- renamed-.json"
-    assert library.is_taken("mine: RENAMED?", tmp_path) and not library.is_taken("mine", tmp_path)
-    assert library.is_taken("2P paired pulse", tmp_path)
+    assert LIBRARY.in_folder(tmp_path).is_taken("mine: RENAMED?") and not LIBRARY.in_folder(tmp_path).is_taken("mine")
+    assert LIBRARY.in_folder(tmp_path).is_taken("2P paired pulse")
 
 
 def test_built_in_protocols_cannot_be_deleted():
-    entry = library.entries(None)[0]
-    with pytest.raises(ProtocolError):
-        library.delete(entry)
+    entry = LIBRARY.entries()[0]
+    with pytest.raises(ValueError, match="cannot be deleted"):
+        LIBRARY.delete(entry)
 
 
 def test_every_mode_cannot_keep_per_recording_timing():
@@ -250,8 +250,8 @@ def test_fits_across_conditions_survive_a_file(tmp_path):
 
 
 def test_every_measure_is_described_in_full():
-    from ema.evoked.metric_details import BASIC, KINETIC_DETAILS, NEAR_TO_FAR_DETAILS, SLICE, SPATIAL_DETAILS
-    from ema.evoked.metrics import KINETIC_KEYS, SPATIAL_KEYS
+    from ema.evoked.measure_details import BASIC, KINETIC_DETAILS, NEAR_TO_FAR_DETAILS, SLICE, SPATIAL_DETAILS
+    from ema.evoked.catalogue import KINETIC_KEYS, SPATIAL_KEYS
 
     required = {"formula", "method", "empty", "meaning", "caveats"}
     assert set(KINETIC_DETAILS) == set(KINETIC_KEYS) and set(SPATIAL_DETAILS) == set(SPATIAL_KEYS)

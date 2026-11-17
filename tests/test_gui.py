@@ -10,7 +10,7 @@ from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication, QInputDialog, QMessageBox, QPushButton
 
 from ema import user_settings
-from ema.launcher import Launcher
+from ema.launcher import PACKAGES, WORKFLOWS, Launcher
 from ema.roi_selection import FILE_NAME, Selections
 from ema.roi_selection.selections import AUTOMATIC, MANUAL
 from ema.roi_selection.setup_dialog import SetupDialog
@@ -215,13 +215,13 @@ def test_flag_box_and_flag_all(window, io_folder, monkeypatch):
 
 
 def test_accept_and_next(window, io_folder):
-    window.folder_list.setCurrentRow(0)
-    window.accept_and_next()
-    assert window.folder_list.currentRow() == 1
-    assert window.folder_list.item(0).text().startswith("✓")
+    window.folder_list.setCurrentRow(1)
+    window.accept_and_next()  # the last folder: on to the first one, which is not reviewed yet
+    assert window.folder_list.currentRow() == 0
+    assert window.folder_list.item(1).text().startswith("✓")
     assert "1 of 2" in window.progress_label.text()
-    window.accept_and_next()  # the last folder: stays, and says so
-    assert window.folder_list.currentRow() == 1 and "last folder" in window.status.text()
+    window.accept_and_next()  # every folder reviewed: stays, and says so
+    assert window.folder_list.currentRow() == 0 and "All 2 folders are reviewed" in window.status.text()
 
 
 def test_detect_all(app, recordings, tmp_path):
@@ -348,8 +348,8 @@ def test_settings_example_starts_with_the_open_folder(window, io_folder):
     assert "ROI centre" in dialog.preview.message.text()
 
 
-def test_launcher_offers_five_packages(app):
+def test_launcher_offers_every_package_in_order(app):
     launcher = Launcher()
-    packages = [b for b in launcher.findChildren(QPushButton) if "\n" in b.text()]
-    assert len(packages) == 5
-    assert all(b.isEnabled() for b in packages)
+    packages = [b.accessibleName() for b in launcher.findChildren(QPushButton) if b.accessibleName()]
+    assert packages == [f"{step}  {name}" for _, _, group in WORKFLOWS for step, (name, _, _) in enumerate(group, start=1)]
+    assert len(packages) == len(PACKAGES) == 5

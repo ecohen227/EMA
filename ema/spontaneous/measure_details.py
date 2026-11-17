@@ -1,6 +1,6 @@
 """The full description of every spontaneous-event measure, for the documentation's measure reference.
 
-One entry per measure key of measures.py (EVENT, RECORDING, SLICE): its
+One entry per measure key of catalogue.py (EVENT, RECORDING, SLICE): its
 formula, how it is computed, when it is empty, what it reflects and what
 to be careful of. A test requires an entry, with every field, for every
 measure. Italic names are settings (see the detector's settings).
@@ -30,19 +30,20 @@ POOLED = ("The pooled trace is an average over about a 128 µm Gaussian, so its 
 
 EVENT_DETAILS = {
     "onset": dict(
-        formula="(onset frame) × frame interval ÷ 1000",
-        method="The onset frame is the frame of the region's largest z, where the template's onset lies; frames are counted "
+        formula="(onset frame) × time between frames ÷ 1000",
+        method="The onset frame is the frame of the region's strongest point, where the event shape's onset lies; frames are counted "
                "from the start of the recording (its frame 0 is the second frame of the file).",
         empty="Never.",
         meaning="When the event happened, for timing measures and to find it in the movie.",
         caveats="The onset is the template's best alignment, within a few frames of the visible start.",
     ),
-    "z": dict(
+    "strength": dict(
         formula="max over the region of (filter output − its median) ÷ (1.4826 × its median absolute deviation)",
-        method="See the detector's steps 2 to 6: the largest z of the event's connected region of z ≥ *Region threshold*.",
+        method="See the detector's steps: the largest value of the event's connected region, in units of each pixel's "
+               "noise (a z-score).",
         empty="Never.",
-        meaning="How far the event stands out of that pixel's noise, after pooling: a larger z is a clearer event.",
-        caveats="z grows with an event's peak, width and duration together, and with how quiet the slice is; it is a "
+        meaning="How far the event stands out of that pixel's noise, after filtering: a stronger event is a clearer one.",
+        caveats="It grows with an event's peak, width and duration together, and with how quiet the slice is; it is a "
                 "detection score, not a size.",
     ),
     "fitted peak": dict(
@@ -79,7 +80,7 @@ EVENT_DETAILS = {
         method="The volume under the fitted Gaussian: its dF/F integrated over the slice.",
         empty=GOOD_FIT,
         meaning="The amount of dopamine signal one event releases, in the same units as an evoked response integrated over "
-                "the slice, so the two can be compared (one event is about 1–2 % of a 50 µA pulse in the study).",
+                "the slice, so the two can be compared.",
         caveats="It multiplies two fitted numbers, so their errors add up; compare medians of many events.",
     ),
     "fit quality": dict(
@@ -98,17 +99,17 @@ EVENT_DETAILS = {
         caveats=POOLED,
     ),
     "time to peak": dict(
-        formula="(frame of the pooled trace's peak − onset frame) × frame interval",
+        formula="(frame of the pooled trace's peak − onset frame) × time between frames",
         method=TRACE,
         empty=TRACE_EMPTY,
         meaning="How long after its detected onset the event peaks.",
         caveats="Can be negative when the peak is found up to 10 frames before the onset. " + POOLED,
     ),
     "rise 10-90": dict(
-        formula="(last frame below 90 % of the peak − last frame below 10 % of the peak, both before the peak) × frame interval",
-        method=TRACE + " Frames, not interpolated, as in the study.",
+        formula="(last frame below 90 % of the peak − last frame below 10 % of the peak, both before the peak) × time between frames",
+        method=TRACE + " Whole frames, not interpolated.",
         empty=TRACE_EMPTY + " Also empty when the trace does not cross both levels before its peak.",
-        meaning="How fast the event rises: with a ~5 ms frame interval, typical events rise in about 25–50 ms.",
+        meaning="How fast the event rises.",
         caveats="Whole frames only (steps of 4.8 ms). " + POOLED,
     ),
     "rise speed": dict(
@@ -119,15 +120,15 @@ EVENT_DETAILS = {
         caveats="Uses the diluted local peak. " + POOLED,
     ),
     "half-width": dict(
-        formula="(first frame below half the peak after it − last frame below half before it) × frame interval",
+        formula="(first frame below half the peak after it − last frame below half before it) × time between frames",
         method=TRACE,
         empty=TRACE_EMPTY + " Also empty when the trace does not fall below half its peak, before or after it.",
         meaning="How long the event lasts at half its height.",
         caveats="Whole frames only. " + POOLED,
     ),
     "half-decay": dict(
-        formula="(first frame after the peak below half the peak − the peak's frame) × frame interval",
-        method=TRACE + " As in the study.",
+        formula="(first frame after the peak below half the peak − the peak's frame) × time between frames",
+        method=TRACE,
         empty=TRACE_EMPTY + " Also empty when the trace does not fall below half its peak within the 200 frames after the onset.",
         meaning="How fast the dopamine signal is cleared or the sensor unbinds.",
         caveats="Noise makes a dim event's trace fall below half earlier, so dimmer events read shorter half-decays. " + POOLED,
@@ -141,7 +142,7 @@ EVENT_DETAILS = {
     ),
     "area": dict(
         formula="Σ pooled trace from the frame after its last frame below 10 % before the peak to the first frame below 10 % "
-                "after it × frame interval ÷ 1000, in %·s",
+                "after it × time between frames ÷ 1000, in %·s",
         method=TRACE + " If the trace never falls below 10 % after the peak, the sum runs to the end of the trace.",
         empty=TRACE_EMPTY + " Also empty when the trace does not start below 10 % of its peak.",
         meaning="The event's whole time course in one number: amplitude and duration together.",
@@ -149,10 +150,10 @@ EVENT_DETAILS = {
     ),
     "x": dict(
         formula="column of the event's centre × pixel size",
-        method="The centre of the fitted Gaussian when the fit is good, otherwise the pixel of the region's largest z.",
+        method="The centre of the fitted Gaussian when the fit is good, otherwise the event's strongest pixel.",
         empty="Never.",
         meaning="Where the event was, from the left edge of the image.",
-        caveats="With a poor fit the position is the z maximum, which can be up to a few pixels off the visible centre.",
+        caveats="With a poor fit the position is the strongest pixel, which can be a few pixels off the visible centre.",
     ),
     "y": dict(
         formula="row of the event's centre × pixel size",
@@ -161,42 +162,42 @@ EVENT_DETAILS = {
         meaning="Where the event was, from the top edge of the image.",
         caveats="As for x.",
     ),
-    "distance to the release centre": dict(
+    "distance to the ROI centre": dict(
         formula="√((x − ROI centre x)² + (y − ROI centre y)²)",
-        method="The release centre of the recording's folder: its ROI centre in the ROI file, or else found automatically "
-               "from the folder's stimulated recordings, as in ROI Selection (the centre of evoked release).",
-        empty="Empty when the folder has no release centre: no ROI file entry and no stimulated recording.",
+        method="The ROI centre of the recording's folder: from the ROI file, or else found automatically from the folder's "
+               "stimulated recordings, as in ROI Selection (where evoked release is strongest).",
+        empty="Empty when the folder has no ROI centre: no ROI file entry and no stimulated recording.",
         meaning="Whether spontaneous events happen where evoked release is strongest, or anywhere.",
         caveats="Compare with the distances of the tissue itself: most of a 2 mm field lies far from its centre.",
     ),
     "distance to the electrode": dict(
-        formula="distance from the pixel of the region's largest z to the nearest electrode pixel × pixel size",
+        formula="distance from the event's strongest pixel to the nearest electrode pixel × pixel size",
         method="The electrode mask of the folder: from the ROI file, or else found automatically from its stimulated "
                "recordings, as in ROI Selection.",
         empty="Empty when the folder has no electrode mask.",
         meaning="Whether events crowd near the stimulating electrode, for example because of damage or leakage there.",
-        caveats="Measured from the z maximum (as in the study), not from the fitted centre.",
+        caveats="Measured from the strongest pixel, not from the fitted centre.",
     ),
     "electrode side": dict(
-        formula="1 if (event centre − release centre) · (electrode's mean pixel − release centre) > 0, else 0",
+        formula="1 if (event centre − ROI centre) · (electrode's mean pixel − ROI centre) > 0, else 0",
         method="The electrode's mean pixel gives the side it comes from.",
-        empty="Empty when the folder has no electrode mask or no release centre.",
+        empty="Empty when the folder has no electrode mask or no ROI centre.",
         meaning="With the share per slice: whether events lean towards the electrode's side of the field.",
-        caveats="The release centre is usually not in the middle of the image, so the two sides have different areas; "
+        caveats="The ROI centre is usually not in the middle of the image, so the two sides have different areas; "
                 "compare with the share of tissue on each side.",
     ),
 }
 
 RECORDING_DETAILS = {
     "events": dict(
-        formula="number of regions reaching θ, without echoes, with their onset not in the end trim",
+        formula="number of regions reaching the *Event threshold*, without echoes, with their onset not in the end trim",
         method="See the detector's steps.",
         empty="Never.",
         meaning="How many spontaneous events the recording holds.",
         caveats="Depends on the searched time; compare rates.",
     ),
     "searched time": dict(
-        formula="(frames of the filtered movie − frames of the end trim) × frame interval",
+        formula="(frames of the filtered movie − frames of the end trim) × time between frames",
         method="The filtered movie has (frames searched − template length + 1) frames, since the template must fit; the end "
                "trim is *Leave out onsets in the last*. About 6.8 s for a 1,650-frame recording with the defaults.",
         empty="Never.",
@@ -226,7 +227,7 @@ RECORDING_DETAILS = {
     ),
     "sign-flipped": dict(
         formula="number of events found in −dF/F (dips), counted like the events",
-        method="The same z movie with its sign flipped; the echo rule is applied both ways, so the control stays fair.",
+        method="The same filtered movie with its sign flipped; echoes are dropped both ways, so the control stays fair.",
         empty="Empty when *Count sign-flipped detections* is off.",
         meaning="An estimate of the false positives: noise produces dips as often as rises, events do not.",
         caveats="Includes genuine negative transients and artefacts (bubbles, debris), so it overestimates the false "
@@ -244,7 +245,7 @@ RECORDING_DETAILS = {
         method="On the bleaching-corrected dF/F movie, before the spike filter (which would lower white noise by about a "
                "third) and before any other filtering.",
         empty="Empty when no tissue was found.",
-        meaning="How noisy single pixels are (4–6 % per frame in the study): noisier slices hide dim events.",
+        meaning="How noisy single pixels are: noisier slices hide dim events.",
         caveats="Events themselves barely change it: they occupy few frames.",
     ),
 }
@@ -256,7 +257,7 @@ SLICE_DETAILS = {
                           meaning="The slice's total searched time, in minutes.", caveats="—"),
     "rate": dict(formula="Σ events ÷ Σ searched time", method="Pooled over the recordings, not a mean of their rates.",
                  empty="Empty when nothing was searched.", meaning="The slice's rate of spontaneous events.",
-                 caveats="Recording time and order matter: the study found rates rise over the first hour of a day."),
+                 caveats="Compare slices recorded in the same way: the rate can change with time after slicing."),
     "density": dict(formula="rate ÷ mean tissue area of the recordings", method="From the rate and the recordings' tissue areas.",
                     empty="Empty when nothing was searched.", meaning="Events per minute per mm² of tissue.",
                     caveats="As for the rate."),
@@ -273,19 +274,18 @@ SLICE_DETAILS = {
         caveats="Can be negative in a quiet slice; it is an estimate, not a count."),
     "sign-flipped share": dict(formula="Σ sign-flipped ÷ Σ events", method="Pooled over the recordings.",
                                empty="Empty when the control is off or no event was found.",
-                               meaning="The share of the slice's events that noise alone could explain (7 % in the study).",
+                               meaning="The share of the slice's events that noise alone could explain.",
                                caveats="Unstable when the slice has few events."),
-    "share near the release centre": dict(
-        formula="(events with distance to the release centre < *Near the release centre within*) ÷ events",
-        method="Over the events with a distance to the release centre.",
-        empty="Empty when no event was found, or the folder has no release centre.",
-        meaning="Whether events concentrate where evoked release is strongest (11 % within 480 µm in the study, against "
-                "17 % of the tissue).",
+    "share near the ROI centre": dict(
+        formula="(events with distance to the ROI centre < *Near the ROI centre within*) ÷ events",
+        method="Over the events with a distance to the ROI centre.",
+        empty="Empty when no event was found, or the folder has no ROI centre.",
+        meaning="Whether events concentrate where evoked release is strongest.",
         caveats="Compare with the share of tissue within the same distance, which depends on where the centre lies."),
     "share on the electrode side": dict(
         formula="mean of the events' electrode side", method="Over the events with an electrode side.",
         empty="Empty when no event has an electrode side.",
-        meaning="Whether events lean towards the electrode's side (77 % in the study, against about half the field).",
+        meaning="Whether events lean towards the electrode's side of the field.",
         caveats="See the electrode side."),
     "nearest-neighbour distance": dict(
         formula="median over events of the distance to the nearest other event of the slice",
@@ -297,8 +297,7 @@ SLICE_DETAILS = {
         method="Random pixels from the first searched recording's tissue, with a fixed seed, so the number is repeatable.",
         empty="Empty with fewer than 2 events.",
         meaning="Below 1: events come back to the same places more than chance (hot spots); about 1: no preference.",
-        caveats="Few events give a noisy ratio; the study's matched-partner test found recurring sites closer than chance "
-                "(840 against 1,057 µm)."),
+        caveats="Few events give a noisy ratio."),
     "recurring sites": dict(
         formula="number of groups of 2 or more events linked by distances below *Same site within*",
         method="Events closer than the radius join one site, directly or through other events.",
@@ -317,8 +316,7 @@ SLICE_DETAILS = {
     "release per minute": dict(
         formula="rate × median size of the slice's events, in %·mm² per minute",
         method="Over the events with a size.", empty="Empty when no event has a size.",
-        meaning="The spontaneous signal per minute, comparable with an evoked response integrated over the slice (about "
-                "16 % of a 50 µA pulse per minute in the study).",
+        meaning="The spontaneous signal per minute, comparable with an evoked response integrated over the slice.",
         caveats="A product of a rate and a median, both uncertain in a quiet slice."),
 }
 

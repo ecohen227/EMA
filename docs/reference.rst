@@ -1,134 +1,177 @@
 Code reference
 ==============
 
+The modules that do the measuring, by package. None of them needs the GUI.
+
+Shared
+------
+
 Recordings
-----------
+~~~~~~~~~~
 
 .. automodule:: ema.recordings
    :members:
 
-ROI Selection: detection
-------------------------
+Settings and measures
+~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: ema.definitions
+   :members: setting, Settings, Measure
+
+Libraries of protocols and detectors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: ema.library
+   :members: Library, Entry, file_name
+
+Kept results
+~~~~~~~~~~~~
+
+.. automodule:: ema.kept_results
+   :members: KeptAnalysis, Plan, FolderResult, RecordingResult, fingerprint, why_not_measured, write_json
+
+Labels from folder names
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: ema.labels
+   :members: Label, LabelSet, FolderLabels, NearMiss, default_labels, words, find
+
+What both analyses' Excel files share
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: ema.excel
+   :members: Slice, slices, groups, save_workbooks, column_table, grouped_table, sheet_names, TablesLocked
+
+ROI Selection
+-------------
+
+Detection
+~~~~~~~~~
 
 .. automodule:: ema.roi_selection.detection
    :members:
 
-ROI Selection: the ROI file
----------------------------
+The ROI file
+~~~~~~~~~~~~
 
 .. automodule:: ema.roi_selection.selections
    :members: FolderSelection, Selections, mask_runs, mask_to_text, text_to_mask
 
-ROI Selection: settings
------------------------
+Settings
+~~~~~~~~
 
 .. autoclass:: ema.roi_selection.settings.RoiSettings
-   :members: to_dict, from_dict, problems
+   :members: problems
 
-Evoked: protocols
------------------
+Evoked responses
+----------------
+
+Protocols
+~~~~~~~~~
 
 .. automodule:: ema.evoked.protocol
-   :members: Protocol, Window, Pulse, PulseTiming, Recording, Comparison, Fit, ConditionFit, Measure, ProtocolError
+   :members: Protocol, Window, Pulse, PulseTiming, Recording, Comparison, Fit, ConditionFit, Column, ProtocolError
 
-Evoked: the measured trace and the unstimulated partner
--------------------------------------------------------
+The catalogue of kinetic and spatial measures
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: ema.evoked.catalogue
+   :members: SpatialSettings
+
+The measured trace and the unstimulated partner
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. automodule:: ema.evoked.traces
    :members: find_partner, make_trace, make_movie, combine, correction_window
 
-Evoked: measuring
------------------
+Measuring
+~~~~~~~~~
 
 .. automodule:: ema.evoked.measures
    :members: Measurement, measure, response, compare, fit_decay, summarise, fit_across_conditions
 
-Evoked: the catalogue of kinetic and spatial measures
------------------------------------------------------
-
-.. automodule:: ema.evoked.metrics
-   :members: Metric, SpatialSettings
-
-Evoked: kinetic measures
-------------------------
+Kinetic measures
+~~~~~~~~~~~~~~~~
 
 .. automodule:: ema.evoked.kinetics
    :members: response_trace, kinetics, crossing, vertex
 
-Evoked: spatial measures
-------------------------
+Spatial measures
+~~~~~~~~~~~~~~~~
 
 .. automodule:: ema.evoked.spatial
    :members: SpatialResult, Decay, measure_spatial, response_map, ring_profile, footprint, centroid_and_unevenness, near_to_far, release_spread, decay_course, decay_measures
 
-Evoked: the template
---------------------
+The template
+~~~~~~~~~~~~
 
 .. automodule:: ema.evoked.template
    :members: Template
 
-Evoked: the protocol library
-----------------------------
+The built-in protocols and the library
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. automodule:: ema.evoked.library
-   :members: Entry, entries, save, delete, is_taken, file_name
+.. automodule:: ema.evoked.presets
+   :members: LIBRARY, PRESETS, write_presets
 
-Spontaneous events: the detector's settings
--------------------------------------------
-
-.. autoclass:: ema.spontaneous.settings.DetectorSettings
-   :members: frames, pixels, to_dict, from_dict, problems
-
-Spontaneous events: the detector
---------------------------------
-
-.. automodule:: ema.spontaneous.detection
-   :members: Detection, detect, resting_brightness, tissue_mask, bleach_corrected, despiked, dff, pixel_noise, kernel, template, time_filter, space_filter, zscore, regions, drop_echoes, z_movie, signed_regions, counted
-
-Spontaneous events: the measures
---------------------------------
-
-.. automodule:: ema.spontaneous.measures
-   :members: Measure, measure_events, event_trace, time_course, peak_map, measure_recording, summarise_slice, clustering_index
-
-Spontaneous events: the detector file and library
--------------------------------------------------
-
-.. automodule:: ema.spontaneous.detector
-   :members: Detector, DetectorError, detector_v5, entries, save_in_library, is_taken, file_name, write_presets
-
-Spontaneous Event Analysis: searching the folders of a recordings folder
-------------------------------------------------------------------------
-
-.. automodule:: ema.spontaneous.analysis
-   :members: Analysis, FolderResult, RecordingResult, Recordings, plan, run, search_recording, automatic_roi, default_workers, detection_part
-
-Spontaneous Event Analysis: the Excel files
--------------------------------------------
-
-.. automodule:: ema.spontaneous.workbook
-   :members: write_workbooks, slice_values, slice_measures
-
-What both analyses' Excel files share
--------------------------------------
-
-.. automodule:: ema.excel
-   :members: Slice, slices, groups, save_workbooks, column_table, grouped_table, TablesLocked
-
-Evoked Analysis: running a protocol on an ROI file
---------------------------------------------------
+Running a protocol on an ROI file
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. automodule:: ema.evoked.analysis
-   :members: Analysis, FolderResult, RecordingResult, Plan, plan, run, measure_folder, folder_fingerprint, choices
+   :members: Analysis, plan, run, measure_folder, folder_fingerprint, choices
 
-Evoked Analysis: the Excel files
---------------------------------
+The Excel files
+~~~~~~~~~~~~~~~
 
 .. automodule:: ema.evoked.workbook
-   :members: write_workbooks, TablesLocked
+   :members: write_workbooks
 
-Labels from folder names
-------------------------
+Spontaneous events
+------------------
 
-.. automodule:: ema.labels
-   :members: Label, LabelSet, FolderLabels, NearMiss, default_labels, words, find
+The detector's settings
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: ema.spontaneous.settings.DetectorSettings
+   :members: frames, pixels, problems
+
+The catalogue of measures
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: ema.spontaneous.catalogue
+
+The detector
+~~~~~~~~~~~~
+
+.. automodule:: ema.spontaneous.detection
+   :members: Detection, detect, resting_brightness, tissue_mask, bleach_corrected, despiked, dff, pixel_noise, median_of_rows, kernel, template, time_filter, space_filter, zscore, connected, regions, drop_echoes, z_movie, signed_regions, counted
+
+The measures
+~~~~~~~~~~~~
+
+.. automodule:: ema.spontaneous.measures
+   :members: measure_events, event_trace, time_course, peak_map, measure_recording, summarise_slice, summarise_events, clustering_index
+
+The detector file
+~~~~~~~~~~~~~~~~~
+
+.. automodule:: ema.spontaneous.detector
+   :members: Detector, DetectorError
+
+The built-in detector and the library
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: ema.spontaneous.presets
+   :members: LIBRARY, PRESETS, standard_detector, write_presets
+
+Searching the folders of a recordings folder
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. automodule:: ema.spontaneous.analysis
+   :members: Analysis, Recordings, plan, run, search_recording, automatic_roi, default_workers, detection_part, one_thread_each
+
+The Excel files
+~~~~~~~~~~~~~~~
+
+.. automodule:: ema.spontaneous.workbook
+   :members: write_workbooks, slice_values

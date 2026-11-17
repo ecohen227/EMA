@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import __version__
-from ..recordings import find_recording_folders
+from ..recordings import find_recording_folders, folder_matches
 from .detection import roi_mask
 from .settings import RoiSettings
 
@@ -127,18 +127,6 @@ class FolderSelection:
         return selection
 
 
-def folder_matches(name, only_with, skip_with):
-    """True if a folder name passes a folder filter.
-
-    The name must contain at least one of the words in `only_with` (if there
-    are any) and none of the words in `skip_with`. Upper and lower case count
-    as the same.
-    """
-    name = name.lower()
-    wanted = not only_with or any(word.lower() in name for word in only_with)
-    return wanted and not any(word.lower() in name for word in skip_with)
-
-
 class Selections:
     """Every folder's selection, with the settings and the folder filter they were made with."""
 
@@ -173,14 +161,14 @@ class Selections:
     def change_settings(self, settings):
         """Use new settings. Every folder then has to be reviewed again.
 
-        What was set by hand is kept: a moved ROI, a redrawn electrode. What
-        was found automatically is found again with the new settings, the
-        next time the folder is opened or detected.
+        What was set by hand is kept: a moved ROI, a redrawn electrode, flags.
+        What was found automatically is found again with the new settings,
+        the next time the folder is opened or detected.
         """
         if settings == self.settings:
             return
         self.settings = settings
-        self.folders = {name: s for name, s in self.folders.items() if s.is_manual}
+        self.folders = {name: s for name, s in self.folders.items() if s.is_manual or s.flagged_files}
         for selection in self.folders.values():
             selection.reviewed = False
             selection.roi_radius_px = settings.roi_radius_px
@@ -205,18 +193,21 @@ class Selections:
 
     @classmethod
     def load(cls, path):
-        """Read a file written by `save`."""
+        """Read a file written by `save`. Raises OSError, or ValueError when it is not an ROI file or is damaged."""
         saved = json.loads(Path(path).read_text(encoding="utf-8"))
-        if saved.get("format") != FORMAT:
+        if not isinstance(saved, dict) or saved.get("format") != FORMAT:
             raise ValueError(f"{Path(path).name} is not an EMA ROI file.")
-        if saved["format_version"] > FORMAT_VERSION:
-            raise ValueError(f"{Path(path).name} was written by a newer version of EMA ({saved['ema_version']}).")
-        selections = cls(saved["recordings_folder"], RoiSettings.from_dict(saved["settings"]))
-        folder_filter = saved.get("folder_filter", {})
-        selections.only_folders_with = folder_filter.get("only_with", [])
-        selections.skip_folders_with = folder_filter.get("skip_with", [])
-        for name, folder in saved["folders"].items():
-            selections.folders[name] = FolderSelection.from_dict(folder)
+        if saved.get("format_version", 1) > FORMAT_VERSION:
+            raise ValueError(f"{Path(path).name} was written by a newer version of EMA ({saved.get('ema_version')}).")
+        try:
+            selections = cls(saved["recordings_folder"], RoiSettings.from_dict(saved["settings"]))
+            folder_filter = saved.get("folder_filter", {})
+            selections.only_folders_with = list(folder_filter.get("only_with", []))
+            selections.skip_folders_with = list(folder_filter.get("skip_with", []))
+            for name, folder in saved["folders"].items():
+                selections.folders[name] = FolderSelection.from_dict(folder)
+        except (KeyError, TypeError, AttributeError) as error:
+            raise ValueError(f"{Path(path).name} is incomplete or damaged ({error!r}).") from error
         return selections
 
     def export_table(self, path):

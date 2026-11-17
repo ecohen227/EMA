@@ -4,13 +4,12 @@ Plain functions on numpy arrays; nothing here needs the GUI. Positions are
 (x, y) in pixels counted from 0: x is the column, y is the row.
 """
 
-import re
 from dataclasses import dataclass
 
 import numpy as np
 from scipy import ndimage
 
-from ..recordings import is_no_stim, list_recordings, load_stack
+from ..recordings import has_skip_word, is_no_stim, list_recordings, load_stack
 
 IMAGE_EDGES = {
     "left": np.s_[:, 0],
@@ -161,12 +160,7 @@ def detection_files(paths, settings):
     named = [path for path in paths if path.stem.lower() in wanted]
     if named:
         return named
-    skip = {word.lower() for word in settings.skip_words}
-    return [
-        path
-        for path in paths
-        if not is_no_stim(path) and not skip & set(re.split(r"[\s_\-]+", path.stem.lower()))
-    ]
+    return [path for path in paths if not is_no_stim(path) and not has_skip_word(path, settings.skip_words)]
 
 
 def mean_recording(paths, load=load_stack):

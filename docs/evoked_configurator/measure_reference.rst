@@ -1,5 +1,5 @@
-Measure reference
-=================
+Evoked measure reference
+========================
 
 Every number a protocol can produce, one by one: how it is named, its unit,
 its definition, its formula, exactly how it is computed, when it is left
@@ -45,15 +45,17 @@ Units
        0 and 1.
    * - ms, ms/mm, %/s, %·s, µm, per mm²
      - Times, times per mm of distance, rates, areas under a response,
-       distances and densities. Frames are converted to ms with the frame
-       interval.
+       distances and densities. Frames are converted to ms with the time
+       between frames.
 
 Words used below
 ----------------
 
-Frame interval
-   The time between two frames, set on the *Recordings* tab (4.849 ms by
-   default). Times measured in frames are converted with it.
+More words are explained in the :doc:`../glossary`.
+
+Time between frames
+   Set on the *Recordings* tab (4.849 ms by default). Times measured in
+   frames are converted with it.
 
 Response
    The trace as a change from the pulse's baseline, in percent: for a
@@ -84,14 +86,18 @@ Crossing
    between that frame and the one before it by straight-line interpolation.
 
 Response map
-   For one pulse, the response of every pixel, relative to the mean of that
-   pixel over the pulse's baseline window, averaged over the frames from
-   *Frames before the peak* before to *Frames from the peak on* after the
-   frame of the maximum of the ROI trace in the pulse's peak window (frames
-   peak − 1 to peak + 3 by default), then blurred with a Gaussian of
-   *Spatial smoothing* pixels. With a bleaching correction (see
-   :doc:`measures`) every pixel is first corrected with the same pixel of
-   the unstimulated partner.
+   For one pulse, the response of every pixel around the peak:
+
+   1. With a bleaching correction (see :doc:`measures`), every pixel is
+      first corrected with the same pixel of the unstimulated partner.
+   2. Each pixel's response is taken relative to its mean over the pulse's
+      baseline window.
+   3. The peak is the frame of the maximum of the ROI trace in the pulse's
+      peak window. The map averages *Frames before the peak* frames before
+      it and *Frames from the peak on* frames from it on (frames peak − 1
+      to peak + 3 by default).
+   4. The map is blurred with a :term:`Gaussian` of *Spatial smoothing*
+      pixels.
 
 Ring
    Ring *k* holds the pixels whose distance from the ROI centre, in pixels,
@@ -131,10 +137,9 @@ response map from its peak on:
    to the end of the far band, the time at which its value first falls to
    half of its value in the first bin, interpolated linearly between bins.
 
-The footprint width is measured at the peak only (*footprint width*): widths
-fitted to the fading maps of later bins proved too noisy to rely on. Whether
-the footprint narrows as it fades follows from the decay times instead: it
-narrows exactly when its edge decays faster than its centre.
+The footprint width is measured at the peak only. Whether the footprint
+narrows as it fades is shown by the decay with distance: it narrows when the
+far band decays faster than the near band (far-near decay ratio below 1).
 
 Baselines, peaks and responses
 ------------------------------

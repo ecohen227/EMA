@@ -4,6 +4,11 @@ A pulse's response map is the response of every pixel (as for the trace: a
 change from the pulse's baseline in percent) averaged over a few frames
 around the peak of the ROI trace. Distances are measured from the ROI centre
 in rings one pixel wide. Pixels under the electrode can be left out.
+
+The measures are made in four steps, each giving the measures of one set of
+keys (below). A new spatial measure is computed in one of the steps and its
+key added to that step's set; a test checks that every measure of the
+catalogue belongs to one step.
 """
 
 from dataclasses import dataclass, field
@@ -13,6 +18,11 @@ from scipy import ndimage, stats
 from scipy.optimize import curve_fit
 
 from .protocol import BRIGHTNESS
+
+FOOTPRINT_KEYS = ("footprint width", "footprint half-width", "r50", "tail fraction")  # see footprint()
+UNEVENNESS_KEYS = ("centroid offset", "elongation", "heterogeneity", "hot spots")  # see centroid_and_unevenness()
+RELEASE_KEYS = ("latency slope", "far-near delay")  # see release_spread()
+DECAY_KEYS = ("far-near decay ratio", "decay-distance slope")  # see decay_measures()
 
 
 @dataclass
@@ -151,7 +161,7 @@ def footprint(profile, radii, settings):
     `radii` are the mean distances of the rings from the centre, in pixels.
     """
     px = settings.pixel_um
-    found = {"footprint width": np.nan, "footprint half-width": np.nan, "r50": np.nan, "tail fraction": np.nan}
+    found = dict.fromkeys(FOOTPRINT_KEYS, np.nan)
     r = radii * px
     fit = fit_lorentzian(r, profile)
     if fit is not None and valid_width(fit[1]):
@@ -184,7 +194,7 @@ def centroid_and_unevenness(image, noise, profile, rings, center, exclude, setti
     model = np.nan_to_num(model)
 
     weights = np.clip(fill_excluded(image, rings, exclude), 0, None) * region
-    found = {"centroid offset": np.nan, "elongation": np.nan, "heterogeneity": np.nan, "hot spots": np.nan}
+    found = dict.fromkeys(UNEVENNESS_KEYS, np.nan)
     centroid = None
     if weights.sum() > 0:
         y, x = np.indices(image.shape)
@@ -234,7 +244,7 @@ def release_spread(protocol, movie, baseline_window, stimulus, window, rings, ex
     s = protocol.spatial
     dt = protocol.sampling_interval_ms
     shape = movie.shape[1:]
-    nothing = ({"latency slope": np.nan, "far-near delay": np.nan}, np.full(shape, np.nan))
+    nothing = (dict.fromkeys(RELEASE_KEYS, np.nan), np.full(shape, np.nan))
     if stimulus is None or window is None:
         return nothing
     first = min(stimulus, window.start)
@@ -279,9 +289,6 @@ def release_spread(protocol, movie, baseline_window, stimulus, window, rings, ex
 # ---------------------------------------------------------------------------
 # Decay with distance
 # ---------------------------------------------------------------------------
-
-DECAY_KEYS = {"far-near decay ratio", "decay-distance slope"}
-
 
 def decay_end(protocol, movie, peak_frame, recording=None):
     """The frame the decay is followed up to (not included): the next stimulus, the end of the recording,
@@ -379,15 +386,15 @@ def measure_spatial(protocol, movie, center, electrode, measurement, recording=N
         spread, centroid = centroid_and_unevenness(image, noise_map(protocol, movie, baseline), profile, rings, center, exclude, s)
         result.centroids[name] = centroid
         values = {**sizes, **spread}
-        if chosen & {"latency slope", "far-near delay"}:
+        if chosen & set(RELEASE_KEYS):
             timing, result.latencies[name] = release_spread(protocol, movie, baseline, stimulus, window, rings, exclude)
             values.update(timing)
-        if chosen & DECAY_KEYS or with_decay:
+        if chosen & set(DECAY_KEYS) or with_decay:
             end = decay_end(protocol, movie, peak_frame, recording)
             result.decays[name] = decay_course(protocol, movie, baseline, peak_frame, end, rings, count, exclude)
             values.update(decay_measures(result.decays[name], s))
         for key in protocol.spatial_measures:
-            result.values[f"{name} {key}"] = values.get(key, np.nan)
+            result.values[f"{name} {key}"] = values[key]
 
     for name in wanted:  # a pulse that could not be measured still gets its (empty) values
         for key in protocol.spatial_measures:

@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QApplication
 from ema import user_settings
 from ema.roi_selection import FolderSelection, RoiSettings, Selections
 from ema.spontaneous.analysis import AUTOMATIC, FILE_NAME, NONE, REVIEWED, Analysis, Recordings, plan, run
-from ema.spontaneous.detector import detector_v5
+from ema.spontaneous.presets import standard_detector
 from ema.spontaneous.workbook import PER_EVENT, PER_SLICE, write_workbooks
 
 from test_spontaneous import EVENTS, movie
@@ -50,7 +50,7 @@ def own_user_settings(tmp_path, monkeypatch):
 def searched(study, output, detector=None, roi_file=True, **options):
     """Search the study's recordings folder, with its ROI file's selections or without."""
     analysis = Analysis.open(output)
-    run(analysis, detector or detector_v5(), Recordings(study.recordings_folder, study if roi_file else None), workers=1,
+    run(analysis, detector or standard_detector(), Recordings(study.recordings_folder, study if roi_file else None), workers=1,
         **options)
     analysis.save()
     return analysis
@@ -74,7 +74,7 @@ def test_without_an_roi_file_the_electrode_and_centre_are_found_automatically(st
     for result in analysis.folders.values():
         assert result.source == AUTOMATIC and "found automatically" in result.notes[0]
         assert [r.values["events"] for r in result.recordings] == [2, 1]
-        assert np.isfinite(result.recordings[0].events[0]["distance to the release centre"])
+        assert np.isfinite(result.recordings[0].events[0]["distance to the ROI centre"])
 
 
 def test_a_folder_without_stimulated_recordings_has_no_electrode_and_no_centre(study_files, tmp_path):
@@ -82,11 +82,11 @@ def test_a_folder_without_stimulated_recordings_has_no_electrode_and_no_centre(s
     folder.mkdir(parents=True)
     write(folder / "no1.tif", movie(seed=99))
     analysis = Analysis.open(tmp_path / "out")
-    run(analysis, detector_v5(), Recordings(tmp_path / "only unstimulated"), workers=1)
+    run(analysis, standard_detector(), Recordings(tmp_path / "only unstimulated"), workers=1)
     result = next(iter(analysis.folders.values()))
     assert result.source == NONE and result.recordings[0].values["events"] == 2
-    assert np.isnan(result.recordings[0].events[0]["distance to the release centre"])
-    assert np.isnan(result.summary["share near the release centre"])
+    assert np.isnan(result.recordings[0].events[0]["distance to the ROI centre"])
+    assert np.isnan(result.summary["share near the ROI centre"])
 
 
 def test_an_roi_file_of_another_recordings_folder_is_not_used(study, tmp_path):
@@ -97,11 +97,11 @@ def test_an_roi_file_of_another_recordings_folder_is_not_used(study, tmp_path):
 def test_recordings_are_searched_in_parallel_with_the_same_results(study, tmp_path):
     one = searched(study, tmp_path / "one")
     analysis = Analysis.open(tmp_path / "two")
-    run(analysis, detector_v5(), Recordings(study.recordings_folder, study), workers=2)
+    run(analysis, standard_detector(), Recordings(study.recordings_folder, study), workers=2)
     for key, result in one.folders.items():
         other = analysis.folders[key]
         assert [r.values["events"] for r in other.recordings] == [r.values["events"] for r in result.recordings]
-        assert other.recordings[0].events[0]["z"] == pytest.approx(result.recordings[0].events[0]["z"])
+        assert other.recordings[0].events[0]["strength"] == pytest.approx(result.recordings[0].events[0]["strength"])
 
 
 def test_flagged_recordings_are_not_searched(study, tmp_path):
@@ -113,12 +113,12 @@ def test_flagged_recordings_are_not_searched(study, tmp_path):
 
 
 def test_a_rerun_searches_only_what_changed(study, tmp_path, monkeypatch):
-    detector = detector_v5()
+    detector = standard_detector()
     searched(study, tmp_path / "out", detector)
     analysis = Analysis.open(tmp_path / "out")
     recordings = Recordings(study.recordings_folder, study)
     assert not plan(analysis, detector, recordings).to_measure
-    detector.event_measures = ["z"]  # other measures in the tables: no new search
+    detector.event_measures = ["strength"]  # other measures in the tables: no new search
     assert analysis.is_current(detector) and not plan(analysis, detector, recordings).to_measure
     study.folders[FOLDERS[0]].roi_center = (40, 40)  # a changed ROI file entry: that folder again
     assert len(plan(analysis, detector, Recordings(study.recordings_folder, study)).to_measure) == 1
@@ -131,7 +131,7 @@ def test_a_stopped_run_keeps_the_finished_folders(study, tmp_path):
     calls = []
     analysis = searched(study, tmp_path / "out", cancelled=lambda: calls.append(1) or len(calls) > 2)
     assert len(analysis.folders) == 1
-    assert len(plan(analysis, detector_v5(), Recordings(study.recordings_folder, study)).to_measure) == 1
+    assert len(plan(analysis, standard_detector(), Recordings(study.recordings_folder, study)).to_measure) == 1
 
 
 def test_the_analysis_file_is_read_back(study, tmp_path):
@@ -148,7 +148,7 @@ def rows(sheet):
 
 
 def test_the_two_excel_files(study, tmp_path):
-    detector = detector_v5()
+    detector = standard_detector()
     analysis = searched(study, tmp_path / "out", detector)
     write_workbooks(analysis)
     events = load_workbook(tmp_path / "out" / PER_EVENT)
@@ -179,11 +179,11 @@ def test_the_two_excel_files(study, tmp_path):
 
 
 def test_measures_not_chosen_stay_out_of_the_tables(study, tmp_path):
-    detector = detector_v5()
-    detector.event_measures, detector.slice_event_measures, detector.slice_measures = ["z"], [], ["rate"]
+    detector = standard_detector()
+    detector.event_measures, detector.slice_event_measures, detector.slice_measures = ["strength"], [], ["rate"]
     analysis = searched(study, tmp_path / "out", detector)
     write_workbooks(analysis)
-    assert load_workbook(tmp_path / "out" / PER_EVENT).sheetnames == ["Events", "Recordings", "z", "Notes", "About"]
+    assert load_workbook(tmp_path / "out" / PER_EVENT).sheetnames == ["Events", "Recordings", "strength", "Notes", "About"]
     assert load_workbook(tmp_path / "out" / PER_SLICE).sheetnames == ["Slices", "rate", "Notes", "About"]
 
 
@@ -204,7 +204,7 @@ def test_the_window_searches_and_writes_the_tables(app, study, tmp_path):
     roi_file.parent.mkdir()
     study.save(roi_file)
     window = SpontaneousAnalysisWindow(user_folder=tmp_path / "detectors", workers=1)
-    assert window.windowTitle() == "EMA – Spontaneous Event Analysis" and window.method_box.currentText() == "Detector v5  (built in)"
+    assert window.windowTitle() == "EMA – Spontaneous Event Analysis" and window.method_box.currentText() == "Standard detector  (built in)"
     assert window.problems()[0] == "Choose a recordings folder."
     window.recordings_input.path.setText(str(study.recordings_folder))
     window.load_recordings_folder()

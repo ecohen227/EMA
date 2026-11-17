@@ -17,6 +17,7 @@ from matplotlib.patches import Rectangle
 from PyQt5.QtCore import Qt, pyqtSignal
 
 from ..blit import Blitter
+from ..recordings import FRAME_MS
 from ..evoked.protocol import Window
 
 BASELINE_BAND = (0.0, 0.3)  # bottom and top of the bands, as fractions of the plot height
@@ -47,8 +48,7 @@ class TracePlot(FigureCanvasQTAgg):
     def __init__(self):
         super().__init__(Figure(figsize=(7, 3.6), layout="constrained"))
         self.axes = self.figure.add_subplot()
-        self.dt = 4.849
-        self.axes.secondary_xaxis("top", functions=(lambda f: f * self.dt, lambda ms: ms / self.dt)).set_xlabel("Time (ms)")
+        self.dt = FRAME_MS
         self.blitter = Blitter(self)
         self.toolbar = None  # set by the window; dragging is off while it zooms or pans
         self.protocol = self.recording = None
@@ -75,7 +75,10 @@ class TracePlot(FigureCanvasQTAgg):
         self.axes.clear()
         self.axes.plot(trace, color=TRACE_COLOR, linewidth=1)
         self.axes.set_xlim(0, len(trace))
-        self.axes.set(xlabel="Frame", ylabel=f"Trace ({protocol.trace_unit})", title=title)
+        trace_name = "ROI brightness (counts)" if protocol.trace_unit == "counts" else "Stimulated ÷ unstimulated − 1 (%)"
+        self.axes.set(xlabel="Frame", ylabel=trace_name, title=title)
+        # the time in ms along the top; made again after every clear(), which removes it
+        self.axes.secondary_xaxis("top", functions=(lambda f: f * self.dt, lambda ms: ms / self.dt)).set_xlabel("Time (ms)")
         if keep_view:
             self.axes.set_xlim(limits[0])
             self.axes.set_ylim(limits[1])

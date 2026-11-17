@@ -1,9 +1,9 @@
-What is measured
-================
+What a protocol measures
+========================
 
 All figures on this page are drawn from the sample recordings by EMA's own
 measuring code, with the built-in protocols. Frames count from the second
-frame of the TIFF (see :doc:`../getting_started`). Every kinetic and spatial
+frame of the TIFF (see :doc:`../recordings`). Every kinetic and spatial
 measure is described in full, with its formula and its pitfalls, in
 :doc:`measure_reference`; :doc:`choosing_measures` says which to rely on.
 
@@ -12,11 +12,12 @@ The trace
 
 The ROI brightness of a recording, *F(t)*, is the mean of the pixels of the
 ROI in frame *t*. The light that excites the sensor also bleaches it, so
-*F* slowly falls during a recording whether or not the slice is stimulated.
-An **unstimulated partner** is a recording made the same way without a
-stimulus; its ROI brightness *U(t)* shows the bleaching alone. Unstimulated
-recordings are the ones whose name starts with ``no`` and a number (such as
-``no6.tif``), unless the name holds a word under *Skip names with*.
+*F* slowly falls during a recording whether or not the slice is stimulated
+(:term:`bleaching`). An **unstimulated partner** is a recording made the
+same way without a stimulus; its ROI brightness *U(t)* shows the bleaching
+alone. Unstimulated recordings are the ones whose name starts with ``no``
+and a number (such as ``no6.tif``), unless the name holds a word under
+*Skip recordings with these words*.
 
 How a stimulated recording finds its partner is part of the protocol:
 
@@ -116,7 +117,7 @@ Baselines, peaks, responses and fits
        given in percent.
    * - Single exponential fit (Tau …)
      - The time constant τ, in ms, of A·exp(−t/τ) + C fitted to the trace by
-       least squares. The fit starts a set number of frames after the
+       :term:`least squares`. The fit starts a set number of frames after the
        maximum inside a pulse's peak window (or at a fixed frame) and lasts a
        set number of frames, or up to the end of the recording.
    * - Double exponential fit
@@ -171,20 +172,24 @@ slice around the ROI centre. They use the whole movie, not only the ROI:
 1. **Response map.** The response of every pixel, as for the trace (a change
    from the pulse's baseline window, in percent), averaged over a few frames
    around the peak of the ROI trace, then blurred a little.
-2. **Rings.** The map is averaged in rings one pixel wide around the ROI
-   centre. Pixels under the stimulating electrode (from ROI Selection, or
-   found automatically) are left out, and a ring less than a quarter inside
-   the image is left empty.
+2. **Rings.** The map is averaged in :term:`rings <ring>` one pixel wide
+   around the :term:`ROI centre`. Pixels under the stimulating electrode
+   (from ROI Selection, or found automatically) are left out when *Leave
+   out the electrode* is ticked (the default), and a ring less than a
+   quarter inside the image is left empty.
 3. **Measures** of the map and its rings, below.
 
 .. include:: ../_generated/spatial_measures.rst
 
-**Release spread** uses the time course of every pixel: each pixel's
-response is smoothed over 3 frames and 1.5 pixels, and a pixel whose peak is
-more than 10 standard deviations of its baseline and at least 30 % of the
-strongest pixels' peak gets a half-rise latency, the time after the stimulus
-at which its response, going back from its peak, falls to half. The median
-latency of each ring then gives the slope and the far–near delay.
+**Release spread** uses the time course of every pixel:
+
+1. Each pixel's response is smoothed over 3 frames and 1.5 pixels.
+2. A pixel gets a half-rise latency when its peak is more than 10
+   :term:`SDs <SD>` of its baseline and at least 30 % of the strongest
+   pixels' peak. The latency is the time after the stimulus at which its
+   response, going back from its peak, falls to half.
+3. The median latency of each ring gives the latency slope and the far-near
+   delay.
 
 Decay with distance
 ~~~~~~~~~~~~~~~~~~~
@@ -236,8 +241,9 @@ Fits across conditions
 ~~~~~~~~~~~~~~~~~~~~~~
 
 A fit across conditions fits a curve, per slice, to one per-recording
-measure against the condition of the slice's recordings, by least squares.
-Two curves are offered:
+measure against the :term:`condition` of the slice's recordings, by least
+squares. Two curves are offered (see :term:`recovery curve` and
+:term:`saturation curve`):
 
 .. list-table::
    :header-rows: 1
@@ -263,16 +269,15 @@ full recovery) is usually best, because the longest delay is often too
 short to show the plateau. *Saturation* is meant for an input–output
 relation, for example the response of P1 against the current.
 
-Rules, so that a curve that only guesses beyond the data gives nothing:
+Recordings whose measure is empty are left out of the fit. A fit across
+conditions is left empty when
 
-* a fit needs more recordings with different conditions than it has free
-  parameters: 4 for a recovery with a free plateau and for a saturation,
-  3 for a recovery with a fixed plateau;
-* a time constant must lie between 1/1000 and 10 times the largest
-  condition, a half-max below 10 times the largest condition, and a
-  steepness between 0.3 and 20; a result at one of these limits is
-  dropped;
-* recordings whose measure is empty are left out.
+* it has too few recordings with different conditions: it needs 4 for a
+  recovery with a free plateau and for a saturation, 3 for a recovery with
+  a fixed plateau;
+* a result reaches one of these limits: a time constant or a half-max
+  outside 1/1000 to 10 times the largest condition, or a steepness outside
+  0.3 to 20.
 
 Be careful: with only 4 to 6 recordings per slice, a fit has little
 freedom and its parameters are uncertain; compare them between groups of

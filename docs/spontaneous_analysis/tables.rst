@@ -1,5 +1,5 @@
-The two Excel files
-===================
+The spontaneous Excel files
+===========================
 
 Every run writes two files into the output folder:
 
@@ -7,7 +7,7 @@ Every run writes two files into the output folder:
 * ``Spontaneous per slice.xlsx``: one row per slice (recording folder).
 
 **Example files**, made from four made-up slices (the sample's unstimulated
-recording with events planted in it) with *Detector v5*, grouped by
+recording with events added to it) with the *Standard detector*, grouped by
 genotype and treatment:
 :download:`Example - Spontaneous per event.xlsx <../examples/Example - Spontaneous per event.xlsx>`
 and :download:`Example - Spontaneous per slice.xlsx <../examples/Example - Spontaneous per slice.xlsx>`.
@@ -27,12 +27,14 @@ What is in each file
        in the recording (by onset), and the detector's chosen per-event
        measures, with their units.
    * - **Recordings**
-     - One row per searched recording, with the chosen per-recording
-       measures: events, searched time, rate, controls.
+     - One row per searched recording: its folder, the labels, *Electrode
+       and centre* (where the folder's electrode and ROI centre came from,
+       see :doc:`index`), and the chosen per-recording measures: events,
+       searched time, rate, controls.
    * - **Slices**
-     - One row per slice, with the number of recordings searched and the
-       chosen per-slice measures, including the summaries of event measures
-       (such as *width median*).
+     - One row per slice: its folder, the labels, *Recordings searched*,
+       *Electrode and centre*, and the chosen per-slice measures, including
+       the summaries of event measures (such as *width median*).
    * - one sheet per measure
      - The same numbers laid out to paste into Prism (below).
    * - **Notes**
@@ -52,8 +54,9 @@ The start of the *Events* sheet of the example (some of its columns):
 Per event: Prism column tables
 ------------------------------
 
-Each measure sheet of ``Spontaneous per event.xlsx`` has one column per
-group, with every event of the group's slices below it: the distribution of
+Each measure sheet of ``Spontaneous per event.xlsx`` is a
+:term:`column table`: one column per group, with every event of the group's
+slices below it: the distribution of
 the measure, for a scatter plot, a box plot or a cumulative distribution.
 The *width* sheet of the example, from row 3 on:
 
@@ -77,6 +80,6 @@ the example:
 
 Make a **Column** table in Prism and paste from cell A4. For a two-way
 comparison (genotype × treatment), set **Slice sheets** to *One row per
-Treatment* and group by *Genotype* only: each sheet is then a grouped table
-with one row per treatment. Paste it from cell A5 into a Prism grouped
+Treatment* and group by *Genotype* only: each sheet is then a
+:term:`grouped table` with one row per treatment. Paste it from cell A5 into a Prism grouped
 table with side-by-side subcolumns.

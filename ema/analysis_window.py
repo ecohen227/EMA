@@ -1,4 +1,4 @@
-"""The window of the evoked and the spontaneous analysis: ROI file, protocol or detector, output folder, labels, groups.
+"""The window of the evoked and the spontaneous analysis: recordings, protocol or detector, output folder, labels, groups.
 
 Both analyses work the same way; what differs (the title, what is measured
 with, the files, how to run and write) is given as a Kind. See
@@ -6,6 +6,7 @@ ema/evoked_analysis/window.py and ema/spontaneous_analysis/window.py.
 """
 
 import time
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,7 +22,6 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QLineEdit,
     QMainWindow,
     QMessageBox,
     QProgressBar,
@@ -38,57 +38,15 @@ from .excel import TablesLocked
 from .labels import LabelSet, default_labels
 from .labels_editor import LabelsEditor, NearMissList
 from .roi_selection import Selections
-from .roi_selection.setup_dialog import FolderFilter, FolderInput
 from .user_settings import remember, remembered
+from .widgets import ERROR_COLOUR, WARNING_COLOUR, FileInput, FolderFilter, FolderInput, coloured, hint, is_inside
 
 MISSING = QColor("#fde2e1")
 NOTED = QColor("#fff1d6")
-WARNING = "color:#b35c00"
-ERROR = "color:#c1121f"
-
-
-def _grey(text=""):
-    label = QLabel(text)
-    label.setWordWrap(True)
-    label.setStyleSheet("color: gray")
-    return label
 
 
 def _folders(count):
     return f"{count} folder" if count == 1 else f"{count} folders"
-
-
-def _is_inside(folder, parent):
-    folder, parent = Path(folder).resolve(), Path(parent).resolve()
-    return folder == parent or parent in folder.parents
-
-
-class FileInput(QWidget):
-    """A file path with a Browse button."""
-
-    changed = pyqtSignal()
-
-    def __init__(self, title, file_filter, path=""):
-        super().__init__()
-        self.title, self.file_filter = title, file_filter
-        self.path = QLineEdit(path)
-        self.path.editingFinished.connect(self.changed)
-        browse = QPushButton("Browse…")
-        browse.clicked.connect(self.browse)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.path, 1)
-        layout.addWidget(browse)
-
-    def browse(self):
-        path, _ = QFileDialog.getOpenFileName(self, self.title, self.path.text(), self.file_filter)
-        if path:
-            self.path.setText(path)
-            self.changed.emit()
-
-    def file(self):
-        text = self.path.text().strip()
-        return Path(text) if text else None
 
 
 @dataclass
@@ -96,23 +54,20 @@ class Kind:
     """What one analysis brings to the window."""
 
     title: str  # the window's title
-    method: str  # what it measures with: "protocol" or "detector"
-    configurator: str  # the package that makes them
+    configurator: str  # the package that makes its protocols or detectors
     key: str  # the prefix of what is remembered between runs
-    analysis: type  # its Analysis class
-    file_name: str  # the file of kept results
+    analysis: type  # its Analysis class (see ema.kept_results)
     tables: tuple  # the names of its Excel files
-    entries: object  # entries(user folder) -> [(label, path)] of its library
-    load: object  # load(path) -> the protocol or detector
-    describe: object  # describe(method) -> (one line, [problems])
+    library: object  # its Library of protocols or detectors
+    describe: object  # describe(protocol or detector) -> (one line, [problems])
     plan: object
     run: object
     write: object
     source: object = None  # source(recordings folder, selections or None) -> what is searched; None: the ROI file's folders
 
     @property
-    def Method(self):
-        return self.method.capitalize()
+    def noun(self):
+        return self.library.noun  # "protocol" or "detector"
 
 
 class Worker(QThread):
@@ -127,13 +82,14 @@ class Worker(QThread):
         self.keep_others = keep_others
         self.stop = False
         self.error = None
+        self.details = ""
 
     def run(self):
         try:
             self.run_analysis(*self.args, progress=self.progressed.emit, cancelled=lambda: self.stop,
                               keep_others=self.keep_others)
         except Exception as error:  # noqa: BLE001  shown to the user, instead of being lost in the thread
-            self.error = error
+            self.error, self.details = error, traceback.format_exc()
 
 
 class AnalysisWindow(QMainWindow):
@@ -142,15 +98,15 @@ class AnalysisWindow(QMainWindow):
     def __init__(self, kind, user_folder=None):
         super().__init__()
         self.kind = kind
+        self.library = kind.library.in_folder(user_folder)
         self.setWindowTitle(kind.title)
-        self.user_folder = user_folder  # the library's folder; None means its own
         self.selections = None
         self.recordings = None  # with a source: what is searched (folders under the recordings folder)
-        self.method = None
-        self.method_path = None
+        self.method = None  # the protocol or detector chosen
         self.analysis = kind.analysis(labels=_remembered_labels())
         self.worker = None
         self.started = 0.0
+        self.tables_outdated = False  # labels or groups changed since the tables were written
         self.group_boxes = {}
         self._build_window()
         self._restore()
@@ -164,29 +120,35 @@ class AnalysisWindow(QMainWindow):
         """True when the analysis searches a recordings folder (the ROI file optional), not the ROI file's folders."""
         return self.kind.source is not None
 
+    @property
+    def where(self):
+        """Where the folders to measure come from, for messages."""
+        return "under this recordings folder" if self.uses_folder else "in this ROI file"
+
     def _build_window(self):
+        noun = self.kind.noun
         self.roi_input = FileInput("Choose the ROI file", "ROI files (roi_selections.json);;JSON files (*.json)")
         self.roi_input.changed.connect(self.load_roi_file)
-        self.roi_info = _grey()
+        self.roi_info = hint()
         self.recordings_input = FolderInput("Choose the recordings folder")
         self.recordings_input.changed.connect(self.load_recordings_folder)
-        self.recordings_info = _grey()
+        self.recordings_info = hint()
         self.filter = FolderFilter()
         self.filter.changed.connect(self.filter_changed)
 
         self.method_box = QComboBox()
         self.method_box.activated.connect(self.choose_method)
         open_method = QPushButton("Open…")
-        open_method.setToolTip(f"Use a {self.kind.method} file that is not in the library.")
+        open_method.setToolTip(f"Use a {noun} file that is not in the library.")
         open_method.clicked.connect(self.open_method_file)
         method_row = QHBoxLayout()
         method_row.addWidget(self.method_box, 1)
         method_row.addWidget(open_method)
-        self.method_info = _grey()
+        self.method_info = hint()
 
         self.output = FolderInput("Choose the output folder")
         self.output.changed.connect(self.output_changed)
-        self.output_info = _grey()
+        self.output_info = hint()
 
         self.groups = QWidget()
         self.groups_grid = QGridLayout(self.groups)
@@ -194,15 +156,14 @@ class AnalysisWindow(QMainWindow):
         self.rows_box = QComboBox()
         self.rows_box.activated.connect(self.grouping_changed)
 
-        form = QFormLayout()
-        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        tables = " and ".join(self.kind.tables)
         if self.uses_folder:
             rows = [
                 ("Recordings folder", "Every folder in it that holds unstimulated recordings (named 'no' and a number) is "
                                       "searched.", [self.recordings_input, self.recordings_info]),
-                ("ROI file", "Optional: the roi_selections.json of ROI Selection for this recordings folder. The folders it "
-                             "covers use its reviewed electrode, release centre and flags; the others' are found "
-                             "automatically from their stimulated recordings.", [self.roi_input, self.roi_info]),
+                ("ROI file (optional)", "The roi_selections.json of ROI Selection for this recordings folder. The folders "
+                                        "it covers use its reviewed electrode, ROI centre and flags; the others' are found "
+                                        "automatically from their stimulated recordings.", [self.roi_input, self.roi_info]),
             ]
         else:
             rows = [
@@ -212,20 +173,24 @@ class AnalysisWindow(QMainWindow):
         rows += [
             ("Folders", "Measure only the folders with one of these words in their path (for example 'input output'), "
                         "and none of the words to skip.", [self.filter]),
-            (self.kind.Method, f"What is measured, as made in the {self.kind.configurator}.", [method_row, self.method_info]),
-            ("Output folder", f"Where {' and '.join(self.kind.tables)}, and {self.kind.file_name} (the kept results) are "
-                              "written. It must be outside the recordings.", [self.output, self.output_info]),
+            (noun.capitalize(), f"What is measured, as made in the {self.kind.configurator}.", [method_row, self.method_info]),
+            ("Output folder", f"Where {tables} are written, with {self.kind.analysis.FILE_NAME} (everything measured, so "
+                              "a new run only measures what is new). It must be outside the recordings.",
+             [self.output, self.output_info]),
             ("Group by", "The labels whose values make the groups of the Prism sheets: with Genotype and Treatment, "
-                         "the groups are WT CTRL, WT IFN, HET CTRL and HET IFN.", [self.groups]),
+                         "the groups are WT CTRL, WT IFN, HET CTRL and HET IFN.",
+             [self.groups, hint("The groups of the Prism sheets, for example WT CTRL, WT IFN, HET CTRL, HET IFN.")]),
             ("Slice sheets", "How the per-slice Prism sheets are laid out: one column per group (a column table), or "
                              "one row per value of a label, such as CTRL and IFN (a grouped table).", [self.rows_box]),
         ]
-        for title, tip, parts in rows:
+        form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        for n, (title, tip, parts) in enumerate(rows, start=1):
             field = QVBoxLayout()
             field.setSpacing(2)
             for part in parts:
                 field.addWidget(part) if isinstance(part, QWidget) else field.addLayout(part)
-            label = QLabel(title + ":")
+            label = QLabel(f"{n}. {title}:")
             label.setToolTip(tip)
             form.addRow(label, field)
             for part in parts:
@@ -234,14 +199,14 @@ class AnalysisWindow(QMainWindow):
 
         self.run_button = QPushButton("Run the analysis")
         self.run_button.setStyleSheet("font-weight: bold; padding: 6px 14px;")
-        self.run_button.setToolTip("Measure the folders that are new or changed, then write both Excel files.")
+        self.run_button.setToolTip(f"Measure the folders that are new or changed, then write {tables}.")
         self.run_button.clicked.connect(self.start)
         self.cancel_button = QPushButton("Stop")
         self.cancel_button.setToolTip("Stop after the recording being measured. The folders measured so far are kept.")
         self.cancel_button.clicked.connect(self.cancel)
         self.cancel_button.hide()
         self.write_button = QPushButton("Rewrite the tables")
-        self.write_button.setToolTip("Write both Excel files again with the labels and groups shown now. Nothing is measured.")
+        self.write_button.setToolTip(f"Write {tables} again with the labels and groups shown now. Nothing is measured.")
         self.write_button.clicked.connect(lambda: self.write_tables())
         self.open_button = QPushButton("Open the output folder")
         self.open_button.clicked.connect(self.open_output)
@@ -254,6 +219,10 @@ class AnalysisWindow(QMainWindow):
         self.status = QLabel()
         self.status.setWordWrap(True)
         self.status.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.outdated = QLabel(coloured("The labels or groups changed since the tables were written: press Rewrite the "
+                                        "tables.", WARNING_COLOUR))
+        self.outdated.setWordWrap(True)
+        self.outdated.hide()
 
         self.settings_panel = QWidget()
         self.settings_panel.setLayout(form)
@@ -264,6 +233,7 @@ class AnalysisWindow(QMainWindow):
         left_layout.addSpacing(8)
         left_layout.addLayout(buttons)
         left_layout.addWidget(self.progress)
+        left_layout.addWidget(self.outdated)
         left_layout.addWidget(self.status)
         left_layout.addStretch()
 
@@ -272,7 +242,7 @@ class AnalysisWindow(QMainWindow):
         self.folders_table.verticalHeader().setVisible(False)
         folders_page = QWidget()
         folders_layout = QVBoxLayout(folders_page)
-        self.folders_hint = _grey()
+        self.folders_hint = hint()
         folders_layout.addWidget(self.folders_hint)
         folders_layout.addWidget(self.folders_table, 1)
         self.labels_editor = LabelsEditor()
@@ -282,7 +252,7 @@ class AnalysisWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.addTab(folders_page, "Folders")
         self.tabs.addTab(self.labels_editor, "Labels")
-        self.tabs.addTab(self.near_misses, "Near misses")
+        self.tabs.addTab(self.near_misses, "Possible typos")
 
         splitter = QSplitter()
         splitter.addWidget(left)
@@ -295,18 +265,18 @@ class AnalysisWindow(QMainWindow):
 
     def _restore(self):
         """Start where the user left off: the last ROI file, protocol or detector, and output folder."""
-        self.fill_methods(remembered(f"{self.kind.key}_{self.kind.method}"))
+        self.fill_methods(remembered(f"{self.kind.key}_{self.kind.noun}"))
         output = remembered(f"{self.kind.key}_output")
         if output:
-            self.output.path.setText(output)
+            self.output.set_path(output)
             self.output_changed()
         recordings = remembered(f"{self.kind.key}_recordings_folder")
         if self.uses_folder and recordings and Path(recordings).is_dir():
-            self.recordings_input.path.setText(recordings)
+            self.recordings_input.set_path(recordings)
             self.load_recordings_folder()
         roi_file = remembered(f"{self.kind.key}_roi_file")
         if roi_file and Path(roi_file).is_file():
-            self.roi_input.path.setText(roi_file)
+            self.roi_input.set_path(roi_file)
         self.load_roi_file()
         self.show_labels()
 
@@ -335,21 +305,19 @@ class AnalysisWindow(QMainWindow):
         self.selections = None
         self.roi_info.setToolTip("")
         if path is None and self.uses_folder:
-            self.roi_info.setText("None: each folder's electrode and release centre are found automatically.")
+            self.roi_info.setText("None: each folder's electrode and ROI centre are found automatically.")
         if path is not None and not path.is_file():
             self.roi_info.setText("⚠ There is no such file.")
         elif path is not None:
             try:
                 self.selections = Selections.load(path)
-            except (OSError, ValueError, KeyError) as error:
+            except (OSError, ValueError) as error:
                 self.roi_info.setText(f"⚠ {error}")
             else:
                 self.roi_info.setToolTip(f"Recordings folder: {self.selections.recordings_folder}")
                 remember(**{f"{self.kind.key}_roi_file": str(path)})
         if self.uses_folder and self.recordings is not None:
-            found = self.recordings.folders()
-            self.recordings = self.kind.source(self.recordings.root, self.selections)
-            self.recordings._found = found
+            self.recordings = self.recordings.with_selections(self.selections)
         self.refresh_folders()
 
     def filter_changed(self):
@@ -366,6 +334,13 @@ class AnalysisWindow(QMainWindow):
             return []
         return [name for name in sorted(self.selections.folders) if self.analysis.matches(name)]
 
+    def unreviewed(self, names):
+        """The folders among these whose ROI file entry was not reviewed in ROI Selection."""
+        if self.uses_folder:
+            entries = [self.recordings.selection(self.recordings.root / n) for n in names] if self.recordings else []
+            return [n for n, s in zip(names, entries) if s is not None and not s.reviewed]
+        return [n for n in names if not self.selections.folders[n].reviewed] if self.selections else []
+
     @property
     def root(self):
         """The recordings folder whose folders are measured, or None."""
@@ -374,9 +349,10 @@ class AnalysisWindow(QMainWindow):
         return Path(self.selections.recordings_folder) if self.selections is not None else None
 
     def refresh_folders(self):
-        """Show the folders to measure with their labels, and the near misses in their names."""
+        """Show the folders to measure with their labels, and the possible typos in their names."""
         names = self.folder_names()
         labels = self.analysis.labels
+        unreviewed = set(self.unreviewed(names))
         if self.uses_folder and self.recordings is not None:
             total = len(self.recordings.folders())
             self.recordings_info.setText(f"{len(names)} of {total} folders will be searched.")
@@ -385,12 +361,12 @@ class AnalysisWindow(QMainWindow):
             elif self.recordings.selections is not None:
                 covered = sum(self.recordings.selection(self.recordings.root / n) is not None for n in names)
                 self.roi_info.setText("It covers every one of these folders." if covered == len(names) else
-                                      f"It covers {covered} of these folders; the others' electrode and release centre are "
+                                      f"It covers {covered} of these folders; the others' electrode and ROI centre are "
                                       "found automatically.")
         elif self.selections is not None:
             folders = self.selections.folders
-            reviewed = sum(folders[name].reviewed for name in names)
-            self.roi_info.setText(f"{len(names)} of {len(folders)} folders will be measured; {reviewed} of them reviewed.")
+            self.roi_info.setText(f"{len(names)} of {len(folders)} folders will be measured; "
+                                  f"{len(names) - len(unreviewed)} of them reviewed.")
         columns = ["Folder", *labels.names()]
         table = self.folders_table
         table.setRowCount(0)
@@ -402,7 +378,10 @@ class AnalysisWindow(QMainWindow):
             read = labels.read(labels.parts(name, recordings_folder))
             row = table.rowCount()
             table.insertRow(row)
-            table.setItem(row, 0, QTableWidgetItem(name))
+            item = QTableWidgetItem(name + ("  (not reviewed)" if name in unreviewed else ""))
+            if name in unreviewed:
+                item.setToolTip("Its ROI was not reviewed in ROI Selection: the automatic ROI and electrode are used.")
+            table.setItem(row, 0, item)
             for column, label in enumerate(labels.names(), start=1):
                 item = QTableWidgetItem(read.values.get(label, ""))
                 notes = [note for note in read.notes if note.startswith(label + ":")]
@@ -417,17 +396,18 @@ class AnalysisWindow(QMainWindow):
                 table.setItem(row, column, item)
         table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         if not names:
-            hint = "Choose an ROI file to see its folders and their labels."
+            hint_text = ("Choose a recordings folder to see its folders and their labels." if self.uses_folder else
+                         "Choose an ROI file to see its folders and their labels.")
         elif missing or noted:
-            hint = "Red: not found in the folder names. Orange: to check (hover over it)."
+            hint_text = "Red: not found in the folder names. Orange: to check (hover over it)."
         else:
-            hint = "Every label was found."
-        self.folders_hint.setText(hint)
+            hint_text = "Every label was found."
+        self.folders_hint.setText(hint_text)
         parts = {name: labels.parts(name, recordings_folder) for name in names}
         misses = labels.near_misses(parts)
         self.near_misses.show_misses(labels, misses)
         self.tabs.setTabText(0, f"Folders ({len(names)})" if names else "Folders")
-        self.tabs.setTabText(2, f"Near misses ({len(misses)})" if misses else "Near misses")
+        self.tabs.setTabText(2, f"Possible typos ({len(misses)})" if misses else "Possible typos")
 
     # ------------------------------------------------------------------
     # Protocol or detector
@@ -435,8 +415,8 @@ class AnalysisWindow(QMainWindow):
 
     def fill_methods(self, chosen=""):
         self.method_box.clear()
-        for label, path in self.kind.entries(self.user_folder):
-            self.method_box.addItem(label, str(path))
+        for entry in self.library.entries():
+            self.method_box.addItem(entry.label, str(entry.path))
         if chosen and self.method_box.findData(chosen) < 0 and Path(chosen).is_file():
             self.method_box.addItem(f"{Path(chosen).stem}  (file)", chosen)
         index = self.method_box.findData(chosen) if chosen else -1
@@ -444,8 +424,9 @@ class AnalysisWindow(QMainWindow):
         self.choose_method()
 
     def open_method_file(self):
-        path, _ = QFileDialog.getOpenFileName(self, f"Open a {self.kind.method}", remembered(f"{self.kind.key}_{self.kind.method}"),
-                                              f"{self.kind.Method} files (*.json)")
+        noun = self.kind.noun
+        path, _ = QFileDialog.getOpenFileName(self, f"Open a {noun}", remembered(f"{self.kind.key}_{noun}"),
+                                              f"{noun.capitalize()} files (*.json)")
         if path:
             if self.method_box.findData(path) < 0:
                 self.method_box.addItem(f"{Path(path).stem}  (file)", path)
@@ -454,20 +435,19 @@ class AnalysisWindow(QMainWindow):
 
     def choose_method(self, *_):
         path = self.method_box.currentData()
-        self.method, self.method_path = None, None
+        self.method = None
         self.method_info.setToolTip("")
         if not path:
             self.method_info.setText("")
             return
         try:
-            self.method = self.kind.load(path)
-        except (OSError, ValueError, KeyError) as error:
-            self.method_info.setText(f"<span style='{ERROR}'>⚠ {error}</span>")
+            self.method = self.library.load(path)
+        except (OSError, ValueError) as error:
+            self.method_info.setText(coloured(f"⚠ {error}", ERROR_COLOUR))
             return
-        self.method_path = path
-        remember(**{f"{self.kind.key}_{self.kind.method}": path})
+        remember(**{f"{self.kind.key}_{self.kind.noun}": path})
         text, problems = self.kind.describe(self.method)
-        text += "".join(f"<br><span style='{ERROR}'>⚠ {problem}</span>" for problem in problems)
+        text += "".join("<br>" + coloured(f"⚠ {problem}", ERROR_COLOUR) for problem in problems)
         self.method_info.setText(text)
         self.method_info.setToolTip(self.method.description)
         self.show_output_info()
@@ -482,24 +462,31 @@ class AnalysisWindow(QMainWindow):
         if folder is None:
             self.show_output_info()
             return
-        if (folder / self.kind.file_name).is_file():
+        taken_over = False
+        if (folder / self.kind.analysis.FILE_NAME).is_file():
             try:
-                self.analysis = self.kind.analysis.load(folder / self.kind.file_name)
-            except (OSError, ValueError, KeyError) as error:
+                self.analysis = self.kind.analysis.load(folder / self.kind.analysis.FILE_NAME)
+                taken_over = True
+            except (OSError, ValueError) as error:
                 self.analysis = self.kind.analysis(folder, labels=self.analysis.labels)
-                self.output_info.setText(f"<span style='{ERROR}'>⚠ Its {self.kind.file_name} cannot be read: {error}</span>")
+                self.output_info.setText(coloured(f"⚠ Its {self.kind.analysis.FILE_NAME} cannot be read: {error}",
+                                                  ERROR_COLOUR))
                 return
         else:
             self.analysis = self.kind.analysis(folder, labels=self.analysis.labels, only_folders_with=self.analysis.only_folders_with,
-                                     skip_folders_with=self.analysis.skip_folders_with, group_by=self.analysis.group_by,
-                                     slice_rows_by=self.analysis.slice_rows_by)
+                                               skip_folders_with=self.analysis.skip_folders_with, group_by=self.analysis.group_by,
+                                               slice_rows_by=self.analysis.slice_rows_by)
         remember(**{f"{self.kind.key}_output": str(folder)})
         self.filter.blockSignals(True)
         self.filter.show_words(self.analysis.only_folders_with, self.analysis.skip_folders_with)
         self.filter.blockSignals(False)
         self.show_labels()
         self.refresh_folders()
+        self.set_outdated(False)
         self.show_output_info()
+        if taken_over:
+            self.output_info.setText(self.output_info.text() + "<br>The labels, folder filter and groups are the ones of "
+                                                               "the earlier analysis in this folder.")
 
     def show_output_info(self):
         analysis = self.analysis
@@ -509,8 +496,8 @@ class AnalysisWindow(QMainWindow):
         elif not analysis.folders:
             text = "New: every folder will be measured."
         elif self.method is not None and not analysis.is_current(self.method):
-            text = (f"<span style='{WARNING}'>{_folders(measured)} measured with another {self.kind.method}: everything will be "
-                    "measured again.</span>")
+            text = coloured(f"{_folders(measured)} measured before, with another {self.kind.noun} or an earlier EMA: "
+                            "everything will be measured again.", WARNING_COLOUR)
         else:
             text = f"{_folders(measured)} measured before: only new or changed folders will be measured."
         self.output_info.setText(text)
@@ -540,6 +527,7 @@ class AnalysisWindow(QMainWindow):
     def grouping_changed(self, *_):
         self.analysis.group_by = [name for name, box in self.group_boxes.items() if box.isChecked()]
         self.analysis.slice_rows_by = self.rows_box.currentData() or ""
+        self.set_outdated(True)
 
     def labels_changed(self):
         names = self.analysis.labels.names()
@@ -549,10 +537,16 @@ class AnalysisWindow(QMainWindow):
         remember(folder_labels=self.analysis.labels.to_dict())
         self.fill_groups()
         self.refresh_folders()
+        self.set_outdated(True)
 
     def near_miss_applied(self):
         self.labels_editor.show_labels(self.analysis.labels)
         self.labels_changed()
+
+    def set_outdated(self, outdated):
+        """Say whether the tables in the output folder lack the latest changes to the labels or groups."""
+        self.tables_outdated = outdated and bool(self.analysis.folders)
+        self.outdated.setVisible(self.tables_outdated)
 
     # ------------------------------------------------------------------
     # Running
@@ -565,13 +559,13 @@ class AnalysisWindow(QMainWindow):
         elif not self.uses_folder and self.selections is None:
             found.append("Choose an ROI file.")
         if self.method is None:
-            found.append(f"Choose a {self.kind.method}.")
+            found.append(f"Choose a {self.kind.noun}.")
         elif self.method.problems():
-            found.append(f"The {self.kind.method} is not complete: " + " ".join(self.method.problems()))
+            found.append(f"The {self.kind.noun} is not complete: " + " ".join(self.method.problems()))
         folder = self.output.folder()
         if folder is None:
             found.append("Choose an output folder.")
-        elif self.root is not None and _is_inside(folder, self.root):
+        elif self.root is not None and is_inside(folder, self.root):
             found.append("The output folder must be outside the recordings folder, so the recordings stay untouched.")
         found += self.analysis.labels.problems()
         if self.root is not None and not self.folder_names():
@@ -588,7 +582,7 @@ class AnalysisWindow(QMainWindow):
             the_plan = self.kind.plan(self.analysis, self.method, self.source())
         finally:
             QApplication.restoreOverrideCursor()
-        if not self.confirm(the_plan):
+        if not self.confirm(the_plan) or not self.unreviewed_accepted(the_plan):
             return
         keep_others = self.keep_others(the_plan)
         if keep_others is None:
@@ -609,27 +603,42 @@ class AnalysisWindow(QMainWindow):
         """Ask before the kept results are replaced. True to run."""
         if not the_plan.replace_all:
             return True
-        dropped = (f" The results of folders that are not in this ROI file ({_folders(len(the_plan.kept_others))}) "
-                   "are dropped." if the_plan.kept_others else "")
+        old = self.analysis.method.get("name", "") if isinstance(self.analysis.method, dict) else ""
+        measured_with = (f"an earlier version of '{old}', or by an earlier EMA" if old == self.method.name else f"'{old}'")
+        dropped = (f" The results of folders that are not {self.where} ({_folders(len(the_plan.kept_others))}) are "
+                   "dropped." if the_plan.kept_others else "")
         answer = QMessageBox.question(
             self, "Measure everything again?",
-            f"The results kept in the output folder were measured with another {self.kind.method} (or another version of "
-            f"EMA). All folders will be measured again with {self.method.name}, and both Excel files replaced."
-            f"{dropped}\n\nContinue?",
+            f"The results in {self.analysis.folder.name} were measured with {measured_with}. Running with "
+            f"'{self.method.name}' measures every folder again and replaces {' and '.join(self.kind.tables)}; the old "
+            f"results are lost.{dropped}\n\nTo keep them, press No and choose another output folder.\n\nContinue?",
+        )
+        return answer == QMessageBox.Yes
+
+    def unreviewed_accepted(self, the_plan):
+        """Ask before folders whose ROI was not reviewed are measured. True to run."""
+        names = self.unreviewed([self.source().name_of(folder) for folder, _, _ in the_plan.to_measure])
+        if not names:
+            return True
+        examples = "\n".join(names[:3]) + ("\n…" if len(names) > 3 else "")
+        answer = QMessageBox.question(
+            self, "Not reviewed",
+            f"{_folders(len(names))} to measure {'was' if len(names) == 1 else 'were'} not reviewed in ROI Selection, for "
+            f"example\n\n{examples}\n\nTheir automatic ROI and electrode will be used. Measure them anyway?",
         )
         return answer == QMessageBox.Yes
 
     def keep_others(self, the_plan):
-        """Ask whether to keep the folders of earlier runs that are not in this ROI file. None: do not run."""
+        """Ask whether to keep the folders of earlier runs that are not measured now. None: do not run."""
         if the_plan.replace_all or not the_plan.kept_others:
             return True
         names = [self.analysis.folders[key].name for key in the_plan.kept_others]
         examples = "\n".join(names[:3]) + ("\n…" if len(names) > 3 else "")
         answer = QMessageBox.question(
             self, "Keep the other folders?",
-            "The output folder holds the results of folders that are not in this ROI file (or do not pass the "
-            f"folder filter): {_folders(len(names))}, for example\n\n{examples}\n\nKeep them in the tables? Choose "
-            "No if they are these same recordings in another place, so they are not in the tables twice.",
+            f"The output folder holds the results of folders that are not {self.where} (or do not pass the folder "
+            f"filter): {_folders(len(names))}, for example\n\n{examples}\n\nKeep them in the tables? Choose No if they "
+            "are these same recordings in another place, so they are not in the tables twice.",
             QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
         )
         return None if answer == QMessageBox.Cancel else answer == QMessageBox.Yes
@@ -650,7 +659,10 @@ class AnalysisWindow(QMainWindow):
     def show_progress(self, done, total, text):
         self.progress.setMaximum(max(total, 1))
         self.progress.setValue(done)
-        self.status.setText(f"Measuring {min(done + 1, total)} of {total}: {text}" if done < total else "Writing the tables…")
+        if total and done >= total:
+            self.status.setText("Writing the tables…")
+        else:
+            self.status.setText(text if text.startswith("Finding") else f"{done} of {total} recordings measured. {text}")
 
     def cancel(self):
         if self.worker is not None:
@@ -661,11 +673,21 @@ class AnalysisWindow(QMainWindow):
     def finished(self):
         worker, self.worker = self.worker, None
         self.set_running(False)
+        try:
+            self.analysis.save()  # what was measured before an error or a stop is kept
+        except OSError as error:
+            QMessageBox.warning(self, "The results could not be saved", str(error))
         if worker.error is not None:
-            self.status.setText(f"<span style='{ERROR}'>⚠ The analysis stopped: {worker.error}</span>")
+            self.status.setText(coloured(f"⚠ The analysis stopped: {type(worker.error).__name__}: {worker.error}",
+                                         ERROR_COLOUR))
+            box = QMessageBox(QMessageBox.Critical, "The analysis stopped",
+                              "The analysis stopped because of an unexpected error. The folders measured until then are "
+                              "kept. Click Show Details… and send the text to the EMA maintainer, with what you were doing.")
+            box.setDetailedText(worker.details)
+            box.exec_()
+            self.show_output_info()
             return
         the_plan = worker.args[3]
-        self.analysis.save()
         measured = [path.as_posix() for path, _, _ in the_plan.to_measure if path.as_posix() in self.analysis.folders]
         recordings = sum(len(self.analysis.folders[key].recordings) for key in measured)
         skipped = sum(len(self.analysis.folders[key].skipped) for key in measured)
@@ -684,24 +706,26 @@ class AnalysisWindow(QMainWindow):
 
     def write_tables(self, quiet=False):
         if not self.analysis.folders or self.analysis.method is None:
-            return
+            return False
         try:
             self.analysis.save()
             self.kind.write(self.analysis)
         except TablesLocked as error:
             QMessageBox.warning(self, "Close the file in Excel", str(error))
-            return
+            return False
         except OSError as error:
             QMessageBox.warning(self, "The tables could not be written", str(error))
-            return
+            return False
+        self.set_outdated(False)
         self.status.setText((self.status.text() + "\n" if quiet else "") + "Tables written.")
+        return True
 
     def open_output(self):
         folder = self.output.folder()
         if folder is not None and folder.is_dir():
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
 
-    def closeEvent(self, event):
+    def closeEvent(self, event):  # noqa: N802 (Qt's name)
         if self.worker is not None:
             answer = QMessageBox.question(self, "Stop the analysis?", "The analysis is running. Stop it and close? "
                                           "The folders measured so far are kept.")
@@ -712,15 +736,22 @@ class AnalysisWindow(QMainWindow):
             self.worker.stop = True
             self.worker.wait()
             self.analysis.save()
+        elif self.tables_outdated:
+            answer = QMessageBox.question(self, "Rewrite the tables?", "The labels or groups changed since the tables "
+                                          "were written. Rewrite the tables before closing?",
+                                          QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+            if answer == QMessageBox.Cancel or (answer == QMessageBox.Yes and not self.write_tables()):
+                event.ignore()
+                return
         self.closed.emit()
         super().closeEvent(event)
 
 
 def _remembered_labels():
-    saved = remembered("folder_labels", None) or remembered("evoked_labels", None)
+    saved = remembered("folder_labels", None)
     if saved:
         try:
             return LabelSet.from_dict(saved)
-        except (KeyError, TypeError, AttributeError):
+        except ValueError:
             pass
     return default_labels()

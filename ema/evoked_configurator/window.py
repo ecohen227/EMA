@@ -12,10 +12,8 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QHeaderView,
-    QInputDialog,
     QLabel,
     QMainWindow,
-    QMessageBox,
     QPushButton,
     QSizePolicy,
     QSplitter,
@@ -27,11 +25,11 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ..evoked import library
 from ..evoked.measures import Measurement, measure
-from ..evoked.protocol import Protocol, ProtocolError
+from ..evoked.presets import LIBRARY
 from ..evoked.spatial import measure_spatial
 from ..user_settings import remember, remembered
+from ..widgets import ERROR_COLOUR, OK_COLOUR, WARNING_COLOUR, LibraryBar, coloured, hint
 from .editors import PulsesEditor, RecordingsEditor
 from .example import ExampleFolder
 from .measure_editors import ComparisonsEditor, KineticsEditor, SpatialEditor
@@ -50,11 +48,9 @@ class ConfiguratorWindow(QMainWindow):
     def __init__(self, user_folder=None):
         super().__init__()
         self.setWindowTitle("EMA – Evoked Analysis Configurator")
-        self.user_folder = user_folder  # where saved protocols go; None means the library's own folder
         self.units = Units()
-        self.entry = None  # the library entry on show, or None for a protocol that was never saved
-        self.protocol = None
-        self.saved = None  # the protocol as last saved, to tell whether it changed
+        self.bar = LibraryBar(LIBRARY.in_folder(user_folder), new=self.new_from_template)
+        self.bar.shown.connect(self.protocol_shown)
         self.example = None
         self.choices = []
         self.trace = None
@@ -62,42 +58,24 @@ class ConfiguratorWindow(QMainWindow):
         self.spatial = None  # the spatial measures of the example recording, when they are needed
 
         self._build_window()
-        self.entries = library.entries(self.user_folder)
-        self.open_entry(0)
+        self.bar.open(0)
         folder = remembered("evoked_example_folder")
         if folder and Path(folder).is_dir():
             self.use_example_folder(Path(folder), remembered("evoked_roi_file") or None)
         else:
             self.plot.clear("Choose an example folder above to see the protocol on a real recording.")
 
+    @property
+    def protocol(self):
+        return self.bar.item
+
     # ------------------------------------------------------------------
     # Building the window
     # ------------------------------------------------------------------
 
     def _build_window(self):
-        self.library_box = QComboBox()
-        self.library_box.setMinimumWidth(260)
-        self.library_box.activated.connect(self.choose_entry)
-        buttons = {}
-        for text, tip, action in (
-            ("New…", "Make a new protocol from the template: a train of pulses and, if you want, a recovery pulse.", self.new_protocol),
-            ("Save", "Save the changes. A built-in protocol is saved under a new name.", self.save),
-            ("Save as…", "Save as a new protocol.", self.save_as),
-            ("Delete", "Delete this protocol from the library.", self.delete),
-            ("Import…", "Add a protocol file to the library.", self.import_protocol),
-            ("Export…", "Save a copy of this protocol anywhere, e.g. to share it.", self.export),
-        ):
-            buttons[text] = QPushButton(text)
-            buttons[text].setToolTip(tip)
-            buttons[text].clicked.connect(action)
-        self.delete_button = buttons["Delete"]
-        self.state = QLabel()
-        top = QHBoxLayout()
-        top.addWidget(QLabel("Protocol:"))
-        top.addWidget(self.library_box)
-        for button in buttons.values():
-            top.addWidget(button)
-        top.addWidget(self.state, 1)
+        self.bar.buttons["New…"].setToolTip("Make a new protocol from a form: a train of pulses and, if you want, a "
+                                            "recovery pulse.")
 
         self.editors = [RecordingsEditor(self.units), PulsesEditor(self.units), KineticsEditor(self.units),
                         SpatialEditor(self.units), ComparisonsEditor(self.units)]
@@ -128,8 +106,7 @@ class ConfiguratorWindow(QMainWindow):
         self.recording_box = QComboBox()
         self.recording_box.setMinimumWidth(170)
         self.recording_box.currentIndexChanged.connect(self.show_example)
-        self.roi_label = QLabel()
-        self.roi_label.setStyleSheet("color: gray")
+        self.roi_label = hint()
         example_row = QHBoxLayout()
         example_row.addWidget(choose_folder)
         example_row.addWidget(self.folder_label, 1)
@@ -138,7 +115,7 @@ class ConfiguratorWindow(QMainWindow):
         example_row.addWidget(self.recording_box)
 
         self.plot = TracePlot()
-        self.plot.toolbar = NavigationToolbar2QT(self.plot, self, coordinates=False)
+        self.plot.toolbar = PlotToolbar(self.plot, self)
         self.plot.dragged.connect(self.window_dragged)
         self.plot.drag_finished.connect(lambda: self.protocol_changed(True))
         self.table = QTableWidget(0, 4)
@@ -177,173 +154,24 @@ class ConfiguratorWindow(QMainWindow):
         splitter.setSizes([620, 800])
         main = QWidget()
         layout = QVBoxLayout(main)
-        layout.addLayout(top)
+        layout.addWidget(self.bar)
         layout.addWidget(splitter, 1)
         self.setCentralWidget(main)
         screen = QApplication.primaryScreen().availableGeometry()
         self.resize(min(1450, screen.width() - 40), min(820, screen.height() - 60))
 
     # ------------------------------------------------------------------
-    # The library
+    # The protocol on show
     # ------------------------------------------------------------------
 
-    def fill_library(self):
-        """List the library, with the protocol on show selected (or added at the end if it was never saved)."""
-        self.entries = library.entries(self.user_folder)
-        labels = [entry.label for entry in self.entries]
-        index = next((i for i, e in enumerate(self.entries) if self.entry and e.path == self.entry.path), None)
-        if index is None:
-            labels.append(f"{self.protocol.name}  (not saved)")
-            index = len(labels) - 1
-        self.library_box.blockSignals(True)
-        self.library_box.clear()
-        self.library_box.addItems(labels)
-        self.library_box.setCurrentIndex(index)
-        self.library_box.blockSignals(False)
-
-    @property
-    def unsaved(self):
-        return self.saved is None or self.protocol.to_dict() != self.saved
-
-    def open_entry(self, index):
-        entry = self.entries[index]
-        try:
-            protocol = entry.load()
-        except (OSError, ProtocolError) as error:
-            QMessageBox.warning(self, "Cannot open", f"{entry.path}\n\n{error}")
-            return
-        self.show_protocol(protocol, entry)
-
-    def show_protocol(self, protocol, entry):
-        self.protocol, self.entry = protocol, entry
-        self.saved = protocol.to_dict() if entry else None
-        self.units.frame_ms = protocol.sampling_interval_ms
-        self.delete_button.setEnabled(entry is not None and not entry.built_in)
-        self.fill_library()
+    def protocol_shown(self):
+        self.units.frame_ms = self.protocol.sampling_interval_ms
         self.protocol_changed(True)
 
-    def choose_entry(self, index):
-        if index >= len(self.entries):
-            return  # the unsaved protocol on show
-        if self.entries[index] == self.entry or not self.may_discard():
-            self.fill_library()
-            return
-        self.open_entry(index)
-
-    def may_discard(self):
-        """True if there are no unsaved changes, or the user saves or discards them."""
-        if not self.unsaved:
-            return True
-        answer = QMessageBox.question(
-            self, "Unsaved changes", f"Save the changes to {self.protocol.name}?",
-            QMessageBox.Save | QMessageBox.Discard | QMessageBox.Cancel,
-        )
-        if answer == QMessageBox.Save:
-            return self.save()
-        return answer == QMessageBox.Discard
-
-    def ask_name(self, title, suggestion):
-        """A protocol name the library does not use yet, or None if the user cancels."""
-        while True:
-            name, accepted = QInputDialog.getText(self, title, "Name of the protocol:", text=suggestion)
-            name = name.strip()
-            if not accepted or not name:
-                return None
-            if not library.is_taken(name, self.user_folder):
-                return name
-            QMessageBox.information(self, title, f"There is already a protocol called {name}. Choose another name.")
-            suggestion = name
-
-    def new_protocol(self):
-        """Make a protocol from the template form."""
-        if not self.may_discard():
-            return
+    def new_from_template(self, parent):
+        """A new protocol made from the template form, or None."""
         dialog = TemplateDialog(self, "New protocol", self.protocol.sampling_interval_ms)
-        if not dialog.exec_():
-            return
-        protocol = dialog.template().build()
-        if library.is_taken(protocol.name, self.user_folder):
-            name = self.ask_name("New protocol", f"{protocol.name} 2")
-            if not name:
-                return
-            protocol.name = name
-        self.show_protocol(protocol, None)
-
-    def save(self):
-        """Save into the library. True if it was saved."""
-        if self.entry is None or self.entry.built_in:
-            return self.save_as()
-        if library.is_taken(self.protocol.name, self.user_folder, except_path=self.entry.path):
-            QMessageBox.information(self, "Save", f"There is already a protocol called {self.protocol.name}. Change its name or use Save as….")
-            return False
-        return self._store(replacing=self.entry.path)
-
-    def save_as(self):
-        suggestion = self.protocol.name
-        if library.is_taken(suggestion, self.user_folder):
-            suggestion = f"{suggestion} copy"
-        name = self.ask_name("Save as", suggestion)
-        if not name:
-            return False
-        self.protocol.name = name
-        return self._store(replacing=None)
-
-    def _store(self, replacing):
-        problems = self.protocol.problems()
-        if problems:
-            QMessageBox.warning(self, "Cannot save yet", "Please fix these first:\n\n• " + "\n• ".join(problems))
-            return False
-        try:
-            path = library.save(self.protocol, self.user_folder, replacing)
-        except OSError as error:
-            QMessageBox.warning(self, "Cannot save", str(error))
-            return False
-        entry = next(e for e in library.entries(self.user_folder) if e.path == path)
-        self.show_protocol(self.protocol, entry)
-        self.statusBar().showMessage(f"Saved {path.name} in the protocol library.", 6000)
-        return True
-
-    def delete(self):
-        if self.entry is None or self.entry.built_in:
-            return
-        answer = QMessageBox.question(self, "Delete", f"Delete the protocol {self.entry.name} from the library?\nThis cannot be undone.")
-        if answer == QMessageBox.Yes:
-            library.delete(self.entry)
-            self.entries = library.entries(self.user_folder)
-            self.open_entry(0)
-
-    def import_protocol(self):
-        if not self.may_discard():
-            return
-        path, _ = QFileDialog.getOpenFileName(self, "Import a protocol", remembered("evoked_import_folder"), "Protocols (*.json)")
-        if not path:
-            return
-        remember(evoked_import_folder=str(Path(path).parent))
-        try:
-            protocol = Protocol.load(path)
-        except (OSError, ProtocolError) as error:
-            QMessageBox.warning(self, "Cannot import", f"{path}\n\n{error}")
-            return
-        if library.is_taken(protocol.name, self.user_folder):
-            name = self.ask_name("Import", f"{protocol.name} (imported)")
-            if not name:
-                return
-            protocol.name = name
-        self.show_protocol(protocol, None)
-        self._store(replacing=None)
-
-    def export(self):
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export the protocol", str(Path(remembered("evoked_import_folder") or Path.home()) / library.file_name(self.protocol.name)),
-            "Protocols (*.json)",
-        )
-        if path:
-            try:
-                self.protocol.save(path)
-            except OSError as error:
-                QMessageBox.warning(self, "Cannot export", str(error))
-                return
-            self.statusBar().showMessage(f"Exported to {path}.", 6000)
+        return dialog.template().build() if dialog.exec_() else None
 
     # ------------------------------------------------------------------
     # Editing
@@ -404,12 +232,10 @@ class ConfiguratorWindow(QMainWindow):
         self.fill_table()
 
     def show_state(self):
-        mark = "  –  changes not saved" if self.unsaved else ""
-        self.state.setText(f"<span style='color:#b35c00'>{mark}</span>" if mark else "")
-        problems = self.protocol.problems()
-        lines = [f"<span style='color:#c1121f'>⚠ {problem}</span>" for problem in problems]
-        lines += [f"<span style='color:#b35c00'>Example: {problem}</span>" for problem in self.measurement.problems]
-        self.problems.setText("<br>".join(lines) if lines else "<span style='color:#1a7f37'>✓ The protocol is complete.</span>")
+        self.bar.changed()
+        lines = [coloured(f"⚠ {problem}", ERROR_COLOUR) for problem in self.protocol.problems()]
+        lines += [coloured(f"Example: {problem}", WARNING_COLOUR) for problem in self.measurement.problems]
+        self.problems.setText("<br>".join(lines) if lines else coloured("✓ The protocol is complete.", OK_COLOUR))
         self.fill_table()
 
     # ------------------------------------------------------------------
@@ -528,11 +354,36 @@ class ConfiguratorWindow(QMainWindow):
         self.table.setSpan(row, 0, 1, 4)
 
     def closeEvent(self, event):  # noqa: N802 (Qt's name)
-        if not self.may_discard():
+        if not self.bar.may_leave():
             event.ignore()
             return
         self.closed.emit()
         super().closeEvent(event)
+
+
+class PlotToolbar(NavigationToolbar2QT):
+    """The plot's toolbar with only Home, Back, Forward, Pan, Zoom and Save."""
+
+    toolitems = [item for item in NavigationToolbar2QT.toolitems if item[0] in ("Home", "Back", "Forward", "Pan", "Zoom", "Save")]
+
+    def __init__(self, canvas, parent):
+        super().__init__(canvas, parent, coordinates=False)
+
+    def pan(self, *args):
+        super().pan(*args)
+        self._say_what_is_on()
+
+    def zoom(self, *args):
+        super().zoom(*args)
+        self._say_what_is_on()
+
+    def _say_what_is_on(self):
+        """Windows cannot be dragged while zoom or pan is on: say so, as long as it is on."""
+        window = self.window()
+        if isinstance(window, QMainWindow):
+            on = self.mode.name != "NONE"
+            window.statusBar().showMessage(f"{self.mode.name.capitalize()} is on: click it again to drag the windows." if on
+                                           else "")
 
 
 def _short(folder):

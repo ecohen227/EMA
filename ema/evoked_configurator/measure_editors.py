@@ -8,7 +8,7 @@ from dataclasses import fields
 
 from PyQt5.QtWidgets import QCheckBox, QDoubleSpinBox, QGridLayout, QLabel, QPushButton, QSpinBox, QWidget
 
-from ..evoked.metrics import KINETIC, SPATIAL, SpatialSettings
+from ..evoked.catalogue import KINETIC, SPATIAL, SpatialSettings
 from ..evoked.protocol import (
     DOUBLE,
     PERCENT_SCALE,
@@ -318,8 +318,9 @@ class ComparisonsEditor(Editor):
             box.setChecked(name in p.summary_statistics)
         self.in_range.setChecked(p.summary_condition_range is not None)
         low, high = p.summary_condition_range or (100, 400)
-        self.low.setValue(low)
-        self.high.setValue(high)
+        for box, value in ((self.low, low), (self.high, high)):
+            box.setSuffix(f" {p.condition_unit}" if p.condition_unit else "")
+            box.setValue(value)
         self.low.setEnabled(self.in_range.isChecked())
         self.high.setEnabled(self.in_range.isChecked())
         self.spread.setChecked(p.summary_baseline_spread)
@@ -335,10 +336,8 @@ class ComparisonsEditor(Editor):
         self.changed.emit(True)
 
     def _free(self, name, owner=None):
-        """`name`, or `name 2`, `name 3`… if another comparison or fit already uses it."""
-        taken = {c.name for c in self.protocol.comparisons if c is not owner}
-        taken |= {n for f in self.protocol.fits for n in f.measure_names()} | set(self.protocol.baselines)
-        taken |= {p.name for p in self.protocol.pulses} | {f.name for f in self.protocol.condition_fits}
+        """`name`, or `name 2`, `name 3`… if another window, pulse, comparison or fit already uses it."""
+        taken = set(self.protocol.names()) - ({owner.name} if owner is not None else set())
         candidate, number = name, 2
         while candidate in taken:
             candidate, number = f"{name} {number}", number + 1
@@ -359,7 +358,7 @@ class ComparisonsEditor(Editor):
         existing = {(c.pulse, c.relative_to, c.scale) for c in self.protocol.comparisons}
         for pulse in pulses:
             if (pulse, pulses[0], RATIO_SCALE) not in existing:
-                self.protocol.comparisons.append(Comparison(self._free(f"n{pulse}"), pulse, pulses[0], RATIO_SCALE))
+                self.protocol.comparisons.append(Comparison(self._free(f"n{pulse}/BL"), pulse, pulses[0], RATIO_SCALE))
         self.changed.emit(True)
 
     def _remove(self, comparison):
@@ -390,6 +389,7 @@ class ComparisonsEditor(Editor):
     def _fill_condition_fits(self):
         p = self.protocol
         measures = [(m.name, m.name) for m in p.measures() if m.per == "recording"]
+        units = {m.name: m.unit for m in p.measures()}
         models = [("recovery", RECOVERY), ("saturation (input–output)", SATURATION)]
         self.condition_fits.clear()
         for fit in p.condition_fits:
@@ -399,7 +399,8 @@ class ComparisonsEditor(Editor):
                 value.setRange(-1e6, 1e6)
                 value.setDecimals(2)
                 value.setKeyboardTracking(False)
-                value.setValue(100.0 if fit.plateau is None else fit.plateau)
+                value.setSuffix(f" {units.get(fit.measure)}" if units.get(fit.measure) not in (None, "", "ratio") else "")
+                value.setValue(_full_recovery(units.get(fit.measure)) if fit.plateau is None else fit.plateau)
                 value.setEnabled(fit.plateau is not None)
                 value.valueChanged.connect(lambda v, f=fit: self._set_plateau(f, v))
                 plateau = row_of(fixed, value)
@@ -418,7 +419,8 @@ class ComparisonsEditor(Editor):
         self.changed.emit(True)
 
     def _set_plateau_fixed(self, fit, on):
-        fit.plateau = 100.0 if on else None
+        units = {m.name: m.unit for m in self.protocol.measures()}
+        fit.plateau = _full_recovery(units.get(fit.measure)) if on else None
         self.changed.emit(True)
 
     def _set_plateau(self, fit, value):
@@ -436,7 +438,7 @@ class ComparisonsEditor(Editor):
         first = p.pulses[0].name
         comparison = next((c for c in p.comparisons if c.pulse in recovered and c.relative_to == first), None)
         if comparison is not None:
-            plateau = 100.0 if comparison.scale == PERCENT_SCALE else 1.0
+            plateau = _full_recovery("%" if comparison.scale == PERCENT_SCALE else "ratio")
             fit = ConditionFit(self._free("Recovery"), comparison.name, RECOVERY, plateau)
         else:
             fit = ConditionFit(self._free("Input-output"), f"{first} response", SATURATION)
@@ -446,3 +448,8 @@ class ComparisonsEditor(Editor):
     def _remove_condition_fit(self, fit):
         self.protocol.condition_fits.remove(fit)
         self.changed.emit(True)
+
+
+def _full_recovery(unit):
+    """The plateau of a full recovery: 1 for a ratio, 100 for a percentage."""
+    return 1.0 if unit == "ratio" else 100.0

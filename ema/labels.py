@@ -246,7 +246,12 @@ class LabelSet:
 
     @classmethod
     def from_dict(cls, data):
-        return cls([Label.from_dict(item) for item in data["labels"]], list(data.get("not_labels", [])), bool(data.get("whole_path", False)))
+        """Labels as saved by `to_dict`. Raises ValueError when they are damaged."""
+        try:
+            return cls([Label.from_dict(item) for item in data["labels"]], [str(w) for w in data.get("not_labels", [])],
+                       bool(data.get("whole_path", False)))
+        except (KeyError, TypeError, AttributeError) as error:
+            raise ValueError(f"The labels are incomplete or damaged ({error!r}).") from error
 
 
 def default_labels():

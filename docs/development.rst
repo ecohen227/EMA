@@ -3,81 +3,74 @@ Working on EMA
 
 The code is meant to be read by the people who use it. It favours plain
 functions, full words for names, and short files with one job each.
+:doc:`extending` shows, step by step, how to add a measure, a setting or a
+feature.
 
 Layout
 ------
 
+The measuring lives in packages named after a topic (``evoked``,
+``spontaneous``, ``roi_selection``); they never import the GUI, so they work
+in scripts, notebooks and the analyses' worker processes (a test checks
+this). The windows live in packages named after the tool on the start window
+(``evoked_configurator``, ``evoked_analysis``, …).
+
 .. code-block:: text
 
-   EMA_V3/
+   EMA/
    ├── EMA.pyw                  double-click to start
    ├── ema/
-   │   ├── app.py               starts Qt, shows errors in a dialog, opens the launcher
-   │   ├── launcher.py          the start window with the five packages
-   │   ├── recordings.py        finding and reading TIFF movies (read-only)
-   │   ├── labels.py            labels read from folder names, and near misses
-   │   ├── labels_editor.py     the Labels and Near misses tabs of both analyses
-   │   ├── analysis_window.py   the window both analyses share; each brings a Kind
+   │   ├── app.py               starts Qt, shows unexpected errors in a dialog, opens the start window
+   │   ├── launcher.py          the start window: the packages, in the order they are used
+   │   ├── paths.py             where saved protocols and detectors, the docs and the remembered choices are
+   │   ├── recordings.py        finding and reading TIFF movies (read-only); the camera's defaults; skip words
+   │   ├── definitions.py       how settings and measures are declared (setting(), Settings, Measure)
+   │   ├── library.py           the library of protocols or detectors: built-in and saved
+   │   ├── kept_results.py      what an analysis keeps in its output folder; what a new run measures again
    │   ├── excel.py             what both analyses' Excel files share: slices, groups, Prism tables, saving
+   │   ├── labels.py            labels read from folder names, and possible typos
    │   ├── user_settings.py     remembers the last folders used
+   │   ├── widgets.py           widgets every window uses: inputs, settings forms, check lists, the library bar
+   │   ├── labels_editor.py     the Labels and Possible typos tabs of both analyses
+   │   ├── analysis_window.py   the window both analyses share; each brings a Kind
    │   ├── blit.py              fast redrawing of things that follow the mouse
-   │   ├── evoked/              protocols and measuring (numpy only, no GUI)
-   │   │   ├── protocol.py      what a protocol holds, its checks and its file
+   │   ├── roi_selection/       ROI Selection
+   │   │   ├── settings.py      every setting: default, label, help text
+   │   │   ├── detection.py     the automatic ROI and electrode
+   │   │   ├── selections.py    the ROI file
+   │   │   └── window.py, setup_dialog.py, preview.py, plots.py, strip.py   its windows
+   │   ├── evoked/              evoked responses: protocols and measuring
+   │   │   ├── protocol.py      what a protocol holds, its checks, what it measures, and its file
+   │   │   ├── catalogue.py     the kinetic and spatial measures, one line each, and the spatial settings
+   │   │   ├── measure_details.py  the full description of every measure, for the measure reference
+   │   │   ├── traces.py        the measured trace and movie, with the unstimulated partner
    │   │   ├── measures.py      measuring one trace with a protocol; fits; slice summaries
-   │   │   ├── metrics.py       the catalogue of kinetic and spatial measures, and the spatial settings
    │   │   ├── kinetics.py      kinetic measures of one pulse
    │   │   ├── spatial.py       response maps, rings and the spatial measures
-   │   │   ├── traces.py        the measured trace and movie, with the unstimulated partner
-   │   │   ├── analysis.py      running a protocol on the folders of an ROI file; the kept results
-   │   │   ├── workbook.py      the two Excel files, laid out for Prism
-   │   │   ├── metric_details.py  the full description of every measure, for the measure reference
    │   │   ├── template.py      the template every protocol can be built from
-   │   │   ├── library.py       built-in and saved protocols
-   │   │   ├── presets.py       the built-in protocols, as code
-   │   │   └── presets/         … and as the files EMA ships
-   │   ├── spontaneous/         spontaneous events (numpy only, no GUI)
+   │   │   ├── presets.py       the built-in protocols, as code, and the protocol library
+   │   │   ├── built_in/        … the built-in protocols as the files EMA ships
+   │   │   ├── analysis.py      running a protocol on the folders of an ROI file
+   │   │   └── workbook.py      the two Excel files, laid out for Prism
+   │   ├── spontaneous/         spontaneous events: the detector and measuring
    │   │   ├── settings.py      every setting of the detector: default, label, help text
-   │   │   ├── detection.py     the detector (detector v5), step by step
-   │   │   ├── measures.py      the event, recording and slice measures
+   │   │   ├── catalogue.py     the event, recording and slice measures, one line each
    │   │   ├── measure_details.py  the full description of every measure, for the measure reference
-   │   │   ├── detector.py      the detector file, the built-in detector and the library
-   │   │   ├── analysis.py      searching the folders of an ROI file in parallel; the kept results
-   │   │   ├── workbook.py      the two Excel files, laid out for Prism
-   │   │   └── presets/         the built-in detectors, as the files EMA ships
-   │   ├── spontaneous_configurator/
-   │   │   ├── window.py        the configurator window
-   │   │   ├── settings_form.py the settings, in sections built from settings.py
-   │   │   └── example.py       the example folder, its release centre and electrode
-   │   ├── evoked_analysis/
-   │   │   └── window.py        what the evoked analysis brings to the shared window
-   │   ├── spontaneous_analysis/
-   │   │   └── window.py        what the spontaneous-event analysis brings to the shared window
-   │   ├── evoked_configurator/
-   │   │   ├── window.py        the configurator window and its library bar
-   │   │   ├── editors.py       the Recordings and Pulses tabs
-   │   │   ├── measure_editors.py  the Kinetics, Spatial, and Comparisons tabs
-   │   │   ├── spatial_plot.py  the response map and ring profile of the Spatial tab
-   │   │   ├── template_dialog.py  "New…": the template form
-   │   │   ├── plot.py          the example trace with draggable windows
-   │   │   ├── example.py       ROI traces of an example folder
-   │   │   ├── pulse_dialog.py  "Place pulses…"
-   │   │   └── widgets.py       small widgets the tabs are built from
-   │   └── roi_selection/
-   │       ├── settings.py      every setting: default, label, help text
-   │       ├── detection.py     the automatic ROI and electrode (numpy only, no GUI)
-   │       ├── selections.py    the ROI file
-   │       ├── setup_dialog.py  recordings folder, settings, output folder
-   │       ├── preview.py       the live example in the setup dialog
-   │       ├── plots.py         the image with ROI and electrode, and the trace
-   │       ├── strip.py         the strip of cards, one per recording
-   │       └── window.py        the ROI Selection window
+   │   │   ├── detection.py     the detector, step by step
+   │   │   ├── measures.py      computing the event, recording and slice measures
+   │   │   ├── detector.py      the detector file: settings, skip words, chosen measures
+   │   │   ├── presets.py       the built-in detector, as code, and the detector library
+   │   │   ├── built_in/        … the built-in detector as the file EMA ships
+   │   │   ├── analysis.py      searching the folders of a recordings folder, in parallel
+   │   │   └── workbook.py      the two Excel files, laid out for Prism
+   │   ├── evoked_configurator/  the Evoked Analysis Configurator window, its tabs and its plots
+   │   ├── evoked_analysis/     what the evoked analysis brings to the shared window
+   │   ├── spontaneous_configurator/  the Spontaneous Event Configurator window and its example folder
+   │   └── spontaneous_analysis/  what the spontaneous-event analysis brings to the shared window
    ├── tests/                   run with: python -m pytest
    └── docs/                    this documentation
 
-The analysis (``detection.py``, ``selections.py``, ``recordings.py``,
-``labels.py`` and everything in ``evoked/``) does not import the GUI, so it
-can be used from scripts and notebooks. For example, to run an evoked
-analysis without the window:
+For example, to run an evoked analysis without the window:
 
 .. code-block:: python
 
@@ -92,6 +85,11 @@ analysis without the window:
    analysis.save()
    write_workbooks(analysis)
 
+The spontaneous analysis searches in several processes at once. On Windows
+each of them starts the script again, so a script that runs it needs
+``if __name__ == "__main__":`` around its main part (see
+``ema/spontaneous/analysis.py``).
+
 Setting up
 ----------
 
@@ -100,80 +98,34 @@ Setting up
    python -m pip install -r requirements-dev.txt
    python -m pytest
 
-The tests make their own small synthetic recordings with a known release
-centre and electrode, so they need no real data. The GUI tests run without
-a screen.
+The tests make their own small synthetic recordings with a known ROI centre
+and electrode, so they need no real data. The window tests run without a
+screen; a message box a test does not answer makes it fail rather than wait.
 
-Adding a setting
-----------------
+Rules that keep the code safe to change
+---------------------------------------
 
-Add one entry to ``RoiSettings`` in ``ema/roi_selection/settings.py`` and
-use it in ``detection.py``. The setup dialog with its live example, the ROI
-file and the tables of this documentation pick it up by themselves. ROI files written before the
-setting existed still load: a missing setting takes its default.
-
-Adding a kinetic or spatial measure
------------------------------------
-
-The measures are listed once, in ``ema/evoked/metrics.py``. To add one:
-
-1. Add a ``Metric`` to ``KINETIC`` or ``SPATIAL``: its name, unit, group and
-   one-line definition.
-2. Describe it in full in ``ema/evoked/metric_details.py``: its formula, how
-   it is computed, when it is empty, what it reflects and what to be careful
-   of. A test fails until every measure of the catalogue is described there.
-3. Compute it in ``kinetics.py`` (in ``kinetics``) or ``spatial.py`` (in
-   ``measure_spatial``), under the same name.
-4. Add a test with a known answer to ``tests/test_evoked_measures.py``.
-
-The check lists of the configurator, the list of what a protocol measures,
-protocol files, the tables in this documentation and the measure reference
-page follow by themselves.
-
-Changing a built-in detector
-----------------------------
-
-The built-in detectors are written as code in ``ema/spontaneous/detector.py``
-(``PRESETS``). After changing them, run
-
-.. code-block:: bat
-
-   python -m ema.spontaneous.detector
-
-to write the files in ``ema/spontaneous/presets``. A test fails while the
-files and the code disagree. A new detector setting needs only an entry in
-``DetectorSettings`` (``ema/spontaneous/settings.py``) and its use in
-``detection.py`` or ``measures.py``; the configurator's form and the tables
-of this documentation follow. A new measure needs an entry in ``EVENT``,
-``RECORDING`` or ``SLICE`` (``measures.py``), its computation, and its full
-description in ``measure_details.py``; a test fails until it has one.
-
-Changing a built-in protocol
-----------------------------
-
-The built-in protocols are written as code in ``ema/evoked/presets.py``, so
-that the tests can check their numbers. After changing that file, run
-
-.. code-block:: bat
-
-   python -m ema.evoked.presets
-
-to write the files in ``ema/evoked/presets``. A test fails while the files
-and the code disagree.
-
-``tests/test_evoked_measures.py`` checks that the built-in protocols give
-exactly the numbers of the earlier EMA programs, using their formulas from
-the EMA V3 handoff folder next to the program (or the folder named in the
-environment variable ``EMA_V2_DIR``). Without that folder those tests are
-skipped.
-
-Adding a package to the start window
-------------------------------------
-
-``PACKAGES`` in ``ema/launcher.py`` lists the packages. Give the package a
-function that opens its window and returns it (or returns ``None`` if the
-user cancels), and put that function in the list in place of ``None``. The
-window needs a ``closed`` signal, which brings the start window back.
+* Every file EMA reads (protocols, detectors, ROI files, kept results,
+  labels) is read by a ``load`` that raises only ``OSError`` or a
+  ``ValueError``: callers catch those two, and a damaged file is reported,
+  never a crash.
+* A recording that cannot be measured is listed in the Notes sheet with the
+  reason; it never stops a run.
+* Built-in protocols and detectors are written as code (``presets.py``) and
+  shipped as files (``built_in/``); a test fails while the two disagree. After
+  changing one, run ``python -m ema.evoked.presets`` or
+  ``python -m ema.spontaneous.presets``.
+* Each analysis has a ``RESULTS_VERSION`` (``ema/evoked/analysis.py``,
+  ``ema/spontaneous/analysis.py``). Raise it by one whenever a change to EMA
+  changes any number an analysis writes: results kept in output folders are
+  then measured again on the next run. Changes that only touch the windows or
+  the tables' layout need no new version.
+* The format of a file (``FORMAT_VERSION``) is raised only when an older EMA
+  could no longer read it correctly.
+* ``tests/test_evoked_measures.py`` checks that the built-in protocols give
+  exactly the numbers of a reference implementation, kept outside the program
+  (the folder named in the environment variable ``EMA_V2_DIR``). Without that
+  folder those tests are skipped.
 
 Building this documentation
 ---------------------------
@@ -189,8 +141,9 @@ Building this documentation
 The first four commands redraw the figures and screenshots from the sample
 recordings (pass their folder as an argument if it is not found);
 ``make_screenshots.py`` also writes the example Excel files in
-``docs/examples``, which the page on the two files shows and offers for
-download. They are only needed after a change to the detection or to
-the windows; the pictures are stored in ``docs/figures`` and
-``docs/screenshots``. The *Documentation* button of the start window opens
-``docs/_build/html/index.html``.
+``docs/examples``, which the pages on the Excel files show and offer for
+download. They are only needed after a change to the measuring or to the
+windows; the pictures are stored in ``docs/figures`` and ``docs/screenshots``.
+The tables of settings and the measure references are written from the code
+each time the documentation is built (see ``docs/conf.py``). The
+*Documentation* button of the start window opens ``docs/_build/html/index.html``.

@@ -38,7 +38,7 @@ from ..excel import (
     sheet_names,
     slices,
 )
-from .measures import EVENT, RECORDING, SLICE, summarise_events
+from .measures import summarise_events
 
 PER_EVENT = "Spontaneous per event.xlsx"
 PER_SLICE = "Spontaneous per slice.xlsx"
@@ -46,7 +46,7 @@ PER_SLICE = "Spontaneous per slice.xlsx"
 
 def write_workbooks(analysis):
     """Write both files into the analysis's output folder. Returns their paths (TablesLocked if one is open in Excel)."""
-    detector = analysis.detector_object()
+    detector = analysis.detector()
     found = slices(analysis)
     books = {PER_EVENT: _per_event(analysis, detector, found), PER_SLICE: _per_slice(analysis, detector, found)}
     return save_workbooks(analysis.folder, books)
@@ -58,23 +58,11 @@ def slice_values(detector, result):
     return {**result.summary, **summarise_events(events, detector.slice_event_measures, detector.slice_statistics)}
 
 
-def slice_measures(detector):
-    """(name, unit, explanation) of every chosen per-slice measure, in order."""
-    units = {m.key: m for m in SLICE}
-    event_units = {m.key: m for m in EVENT}
-    chosen = [(units[k].key, "" if units[k].unit == "count" else units[k].unit, units[k].explanation)
-              for k in [m.key for m in SLICE] if k in detector.slice_measures]
-    for key in detector.slice_event_measures:
-        for statistic in detector.slice_statistics:
-            chosen.append((f"{key} {statistic}", event_units[key].unit, f"The {statistic} of the slice's events' {key}."))
-    return chosen
-
-
 def _per_event(analysis, detector, found):
     workbook = Workbook()
     label_names = analysis.labels.names()
-    event_measures = [m for m in EVENT if m.key in detector.event_measures]
-    recording_measures = [m for m in RECORDING if m.key in detector.recording_measures]
+    event_measures = detector.event_columns()
+    recording_measures = detector.recording_columns()
 
     sheet = workbook.active
     sheet.title = "Events"
@@ -91,7 +79,7 @@ def _per_event(analysis, detector, found):
 
     sheet = workbook.create_sheet("Recordings")
     header = ["Folder", "Recording", *label_names, "Electrode and centre"]
-    sheet.append(header + [heading(m.key, "" if m.unit == "count" else m.unit) for m in recording_measures])
+    sheet.append(header + [heading(m.key, m.unit) for m in recording_measures])
     for item in found:
         for recording in item.result.recordings:
             row = [item.result.name, recording.file, *[item.labels[name] for name in label_names], item.result.source]
@@ -113,7 +101,7 @@ def _per_event(analysis, detector, found):
 def _per_slice(analysis, detector, found):
     workbook = Workbook()
     label_names = analysis.labels.names()
-    measures = slice_measures(detector)
+    measures = detector.slice_columns()
     values = {item.key: slice_values(detector, item.result) for item in found}
 
     sheet = workbook.active
@@ -161,12 +149,12 @@ def _about_sheet(workbook, analysis, detector, measures):
         ("", detector.description),
         ("Searched", "The unstimulated recordings of each folder (named 'no' and a number)"
                      + (f", without those named with {', '.join(detector.skip_words)}" if detector.skip_words else "") + "."),
-        ("Settings", f"Spatial filter σ {s.blur_um:g} µm; template rise {s.rise_ms:g} ms, decay {s.decay_ms:g} ms; events at "
-                     f"z ≥ {s.event_z:g} (regions of z ≥ {s.region_z:g}); echo rule {'on' if s.echo_rule else 'off'}; end trim "
-                     f"{s.end_trim_ms:g} ms. Every setting is in the detector's file."),
+        ("Settings", f"Pixels pooled over {s.blur_um:g} µm; event shape rise {s.rise_ms:g} ms, decay {s.decay_ms:g} ms; "
+                     f"events at least {s.event_z:g} × the noise. Every setting is in the detector's file, and in the "
+                     "kept results file."),
         ("Recordings", analysis.recordings_folder),
-        ("ROI file", analysis.roi_file or "None: each folder's electrode and release centre were found automatically."),
-        ("Electrode and centre", "Where each folder's electrode and release centre came from: 'ROI file, reviewed' or "
+        ("ROI file", analysis.roi_file or "None: each folder's electrode and ROI centre were found automatically."),
+        ("Electrode and centre", "Where each folder's electrode and ROI centre came from: 'ROI file, reviewed' or "
                                  "'ROI file' (its entry in the ROI file), 'automatic' (found from the folder's stimulated "
                                  "recordings, as in ROI Selection), or 'none' (no stimulated recording: no electrode, and "
                                  "the place measures are empty)."),

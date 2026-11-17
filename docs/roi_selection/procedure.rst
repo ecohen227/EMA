@@ -4,8 +4,8 @@ How the ROI and the electrode are found
 Both are found per recording folder, from the recordings with the clearest
 response. By default these are ``200uA.tif`` and ``300uA.tif``. A folder
 that has neither (an 11-pulse folder, for example) uses all its stimulated
-recordings: every file whose name does not start with ``no``, except the
-"red" movies.
+recordings: every file whose name is not ``no`` and a number, except those
+with a :term:`skip word <skip words>` such as ``red``.
 
 These recordings are first averaged, frame by frame, into one **mean
 recording**. Everything below is done on that one movie. In the window it is
@@ -28,11 +28,11 @@ The ROI is a circle around **the pixel with the strongest response**.
    followed through the *response search window*. The frame where it is
    highest (after a 5-frame running mean) is the peak frame.
 2. **Baseline image.** The mean of the frames in the *baseline window* gives
-   the resting brightness F0 of every pixel.
+   the resting brightness :term:`F0` of every pixel.
 3. **Image at the peak.** The mean of a few frames around the peak: by
    default 2 before it and 8 from the peak on, about 50 ms in all.
-4. **Response map.** Image at the peak ÷ baseline image − 1. This is dF/F
-   for every pixel.
+4. **Response map.** Image at the peak ÷ baseline image − 1. This is
+   :term:`dF/F` for every pixel.
 5. **Smooth, take the maximum.** The response map is blurred with a Gaussian
    (*smoothing*, 2 pixels) so that one noisy pixel cannot win. The brightest
    pixel of the result is the centre of the ROI. The ROI is the circle of

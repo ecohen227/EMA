@@ -1,9 +1,9 @@
 """Measuring one trace with a protocol.
 
 The arithmetic follows the definitions shown in the configurator (see
-`Protocol.measures`), in the same order of operations as the earlier EMA
-programs, so that their numbers are reproduced exactly. Nothing here needs
-the GUI.
+`Protocol.measures`). The order of operations is fixed: tests compare the
+results with reference values to the last digit, so a change that only
+reorders a computation shows up there. Nothing here needs the GUI.
 """
 
 import warnings
@@ -231,7 +231,7 @@ def fit_across_conditions(fit, conditions, values):
             (top, half, steepness), _ = curve_fit(hill, x, y, p0=[y.max(), np.median(x[x > 0]), 2.0],
                                                   bounds=([0, largest / 1000, 0.3], [np.inf, 10 * largest, 20]), maxfev=20000)
             if inside(half, largest / 1000, 10 * largest) and inside(steepness, 0.3, 20):
-                found.update({f"{fit.name} half-max": half, f"{fit.name} max": top, f"{fit.name} steepness": steepness})
+                found.update(zip(fit.measure_names(), (half, top, steepness)))
             return found
         tau0, start0 = np.median(x), y[np.argmin(x)]
         bounds_tau = (largest / 1000, 10 * largest)
@@ -247,9 +247,7 @@ def fit_across_conditions(fit, conditions, values):
             (start, tau), _ = curve_fit(lambda x_, s, t: recovery(x_, s, plateau, t), x, y, p0=[start0, tau0],
                                         bounds=([-np.inf, bounds_tau[0]], [np.inf, bounds_tau[1]]), maxfev=20000)
         if inside(tau, *bounds_tau):
-            found.update({f"{fit.name} time constant": tau, f"{fit.name} start": start})
-            if fit.plateau is None:
-                found[f"{fit.name} plateau"] = plateau
+            found.update(zip(fit.measure_names(), (tau, start, plateau)))  # the plateau only when it was fitted
     except (RuntimeError, ValueError):
         pass
     return found

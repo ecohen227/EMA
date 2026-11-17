@@ -1,30 +1,32 @@
-The configurator, step by step
-==============================
+Spontaneous Event Configurator, step by step
+============================================
 
-1. **Choose a detector** in the bar at the top: *Detector v5* or one of
-   your own.
+1. **Choose a detector** in the bar at the top: the *Standard detector* or
+   one of your own.
 2. **Choose an example folder**: a folder of recordings with unstimulated
    recordings in it, such as an ``input output`` folder. Choose the
-   **ROI file** of ROI Selection too, so the release centre (ROI centre) and
-   the electrode are the reviewed ones; without it they are found
+   **ROI file** of ROI Selection too, so that the :term:`ROI centre` and the
+   electrode are the reviewed ones; without it they are found
    automatically from the folder's stimulated recordings. Nothing is ever
    written into the folder.
 3. The first unstimulated recording is searched at once (a few seconds).
    Choose another under **Recording**. The line above the plots says how
-   many events were found in how much searched time, with the sign-flipped
-   and time-reversed counts.
-4. **Look at the events.** The left plot shows each pixel's largest z over
-   the recording: events are circled and numbered, the electrode is outlined
-   in cyan, and + marks the release centre. Click an event, or its row in
-   the table, to see its **peak map** (with the fitted Gaussian's
-   half-maximum circle) and its **pooled trace** (with the detected onset
-   dashed).
+   many events were found in how much :term:`searched time`, with the
+   :term:`sign-flipped` and :term:`time-reversed` counts.
+4. **Look at the events.** The left plot shows each pixel's largest
+   :term:`strength` over the recording: events are circled and numbered,
+   the electrode is outlined in cyan, and + marks the ROI centre. Click an
+   event, or its row in the table, to see its :term:`peak map` (with the
+   fitted Gaussian's half-maximum circle) and its :term:`pooled trace`
+   (with the detected onset dashed).
 5. **Change the detector** on the tabs:
 
-   * **1 Detector**: the description, the words that exclude a recording
-     (``red`` by default), and every setting, in sections that open on a
-     click. A closed section says how many of its settings differ from
-     detector v5. *Restore the defaults* brings them all back.
+   * **1 Detector**: the description, *Skip recordings with these words*
+     (``red`` by default), and the settings, in sections that open on a
+     click. The everyday settings are in the sections at the top; the
+     expert ones are in the closed *Advanced* section. A closed section
+     says how many of its settings differ from the defaults. *Restore the
+     defaults* brings them all back.
    * **2 Per event**: the measures of each event, with *All* and *None*.
    * **3 Per recording and slice**: the measures of each recording and of
      each slice (all searched recordings of a folder), and which event

@@ -1,16 +1,16 @@
-"""The spontaneous-event detector (detector v5 of the metric study), step by step.
+"""The spontaneous-event detector, step by step.
 
 1. dF/F of every pixel against a polynomial fitted over time (bleaching),
    then a running median over a few frames (camera spikes).
-2. A matched filter in time: the event template, fitted with a straight-line
-   baseline at every frame.
+2. A matched filter in time: the event shape (the template), fitted with a
+   straight-line baseline at every frame.
 3. A matched filter in space: a Gaussian over the tissue only.
 4. Each filtered frame's median over the tissue is subtracted (the
    field-wide signal).
-5. z = (output − its median) ÷ (1.4826 × its median absolute deviation),
-   pixel by pixel.
+5. The strength z = (output − its median) ÷ (1.4826 × its median absolute
+   deviation), pixel by pixel: how many times the noise the output rises.
 6. An event is a connected region of z ≥ the region threshold whose maximum
-   reaches the event threshold θ, placed at that maximum.
+   reaches the event threshold, placed at that maximum.
 7. Of two regions of opposite sign close in time and place, only the
    stronger counts (the template's echoes).
 8. Onsets in the last part of the searched range are not counted.
@@ -26,9 +26,14 @@ from dataclasses import dataclass, field
 import numpy as np
 import scipy.fft as sfft
 from scipy import ndimage
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
 
+BLEACH_CHUNK = 2048  # pixels corrected for bleaching at a time, which keeps the float64 intermediates small
 ECHO_MIN_Z = 5.0  # regions weaker than this neither count nor veto (unless the event threshold is lower)
-NEIGHBOURS = np.ones((3, 3, 3), bool)  # regions are connected through faces, edges and corners in time and space
+# Regions are connected through faces, edges and corners in time and space: these are the neighbours that come
+# later in the movie (the other half are the same pairs seen from the other side).
+LATER_NEIGHBOURS = [(dt, dr, dc) for dt in (0, 1) for dr in (-1, 0, 1) for dc in (-1, 0, 1) if (dt, dr, dc) > (0, 0, 0)]
 
 
 @dataclass
@@ -87,7 +92,11 @@ def bleach_corrected(frames, settings):
     basis = np.vander(np.linspace(-1, 1, count), settings.bleach_order + 1)
     values = frames.reshape(count, -1)
     coefficients, *_ = np.linalg.lstsq(basis, values, rcond=None)
-    return (values / (basis @ coefficients) - 1).astype(np.float32).reshape(frames.shape)
+    corrected = np.empty(values.shape, np.float32)
+    for start in range(0, values.shape[1], BLEACH_CHUNK):
+        part = slice(start, start + BLEACH_CHUNK)
+        corrected[:, part] = values[:, part] / (basis @ coefficients[:, part]) - 1
+    return corrected.reshape(frames.shape)
 
 
 def despiked(d, tissue, settings):
@@ -106,12 +115,31 @@ def dff(frames, tissue, settings):
     return despiked(bleach_corrected(frames, settings), tissue, settings)
 
 
+def median_of_rows(values, overwrite=False):
+    """The median of each row of a 2-D array: the same numbers as np.median(values, axis=1), but faster.
+
+    With `overwrite`, `values` is reordered in place instead of copied.
+    """
+    part = values if overwrite else values.copy()
+    middle = part.shape[1] // 2
+    if part.shape[1] % 2:
+        part.partition(middle, axis=1)
+        found = part[:, middle].copy()
+    else:
+        part.partition((middle - 1, middle), axis=1)
+        found = (part[:, middle - 1] + part[:, middle]) / 2
+    found[np.isnan(part).any(axis=1)] = np.nan
+    return found
+
+
 def pixel_noise(d, tissue):
     """The median over the tissue of each pixel's robust SD over time (1.4826 × median absolute deviation), in %."""
     if not tissue.any():
         return np.nan
-    pixels = d[:, tissue]
-    return float(np.median(np.median(np.abs(pixels - np.median(pixels, 0)), 0)) * 1.4826 * 100)
+    pixels = np.ascontiguousarray(d[:, tissue].T)  # one row per pixel
+    pixels -= median_of_rows(pixels)[:, None]
+    np.abs(pixels, out=pixels)
+    return float(np.median(median_of_rows(pixels, overwrite=True)) * 1.4826 * 100)
 
 
 def kernel(t_ms, decay_ms, rise_ms):
@@ -154,32 +182,68 @@ def space_filter(movie, tissue, settings):
     sigma = settings.pixels(settings.blur_um)
     if sigma > 0:
         weight = ndimage.gaussian_filter(tissue.astype(np.float32), sigma, mode="constant", truncate=3.0)
-        out = ndimage.gaussian_filter(movie, (0, sigma, sigma), mode="constant", truncate=3.0) / np.maximum(weight, 1e-3)
+        out = ndimage.gaussian_filter(movie, (0, sigma, sigma), mode="constant", truncate=3.0)
+        out /= np.maximum(weight, 1e-3)
     else:
         out = movie.copy()
     if settings.remove_field:
-        out -= np.median(out[:, tissue], axis=1)[:, None, None]
+        out -= median_of_rows(out[:, tissue], overwrite=True)[:, None, None]
     return out
 
 
 def zscore(movie, tissue):
     """(value − median) ÷ (1.4826 × median absolute deviation) per pixel, from every second frame; 0 off the tissue."""
-    movie -= np.median(movie[::2], axis=0)
-    movie /= np.maximum(np.median(np.abs(movie[::2]), axis=0) * 1.4826, 1e-12)
-    movie[:, ~tissue] = 0
+    flat = movie.reshape(len(movie), -1)
+    inside = np.flatnonzero(tissue.ravel())
+    sample = np.ascontiguousarray(flat[::2][:, inside].T)  # one row per tissue pixel
+    center = np.zeros(flat.shape[1], movie.dtype)
+    center[inside] = median_of_rows(sample)
+    sample -= center[inside][:, None]
+    np.abs(sample, out=sample)
+    spread = np.ones(flat.shape[1], movie.dtype)
+    spread[inside] = median_of_rows(sample, overwrite=True) * 1.4826
+    flat -= center
+    flat /= np.maximum(spread, 1e-12)
+    flat[:, ~tissue.ravel()] = 0
     return movie
 
 
-def regions(z, low, offset):
-    """Connected regions of z ≥ low: (onset frame, row, column) of each region's maximum, and that maximum.
+def connected(mask):
+    """(flat index, region number) of every True pixel of a 3-D mask, its regions connected through faces, edges and
+    corners. Regions are numbered from 1 in the order their first pixel comes in the movie, as ndimage.label numbers
+    them; only the True pixels are visited, which is much faster when they are few."""
+    flat = mask.ravel()
+    inside = np.flatnonzero(flat)
+    if not inside.size:
+        return inside, inside
+    frames, rows, cols = mask.shape
+    t, rest = np.divmod(inside, rows * cols)
+    r, c = np.divmod(rest, cols)
+    starts, ends = [], []
+    for dt, dr, dc in LATER_NEIGHBOURS:
+        within = np.flatnonzero((t + dt < frames) & (r + dr >= 0) & (r + dr < rows) & (c + dc >= 0) & (c + dc < cols))
+        neighbour = inside[within] + (dt * rows + dr) * cols + dc
+        both = flat[neighbour]
+        starts.append(within[both])
+        ends.append(np.searchsorted(inside, neighbour[both]))
+    starts, ends = np.concatenate(starts), np.concatenate(ends)
+    graph = coo_matrix((np.ones(len(starts), np.int8), (starts, ends)), shape=(len(inside), len(inside)))
+    _, region = connected_components(graph, directed=False)
+    _, first = np.unique(region, return_index=True)  # where each region starts in the movie
+    number = np.empty(len(first), np.int64)
+    number[np.argsort(first)] = np.arange(1, len(first) + 1)
+    return inside, number[region]
+
+
+def regions(z, low, offset, sign=1):
+    """Connected regions of sign × z ≥ low: (onset frame, row, column) of each region's maximum, and that maximum.
 
     The onset is the frame `offset` frames after the start of the template window.
     """
-    labels, count = ndimage.label(z >= low, structure=NEIGHBOURS)
-    if count == 0:
+    inside, label_of = connected(z >= low if sign > 0 else z <= -low)
+    if not inside.size:
         return np.zeros((0, 3)), np.zeros(0)
-    inside = np.flatnonzero(labels)
-    label_of, value = labels.ravel()[inside], z.ravel()[inside]
+    value = sign * z.ravel()[inside]
     order = np.lexsort((value, label_of))
     last = np.r_[np.flatnonzero(np.diff(label_of[order])), len(order) - 1]
     where = np.column_stack(np.unravel_index(inside[order[last]], z.shape)) + np.array([offset, 0, 0])
@@ -217,7 +281,7 @@ def z_movie(d, tissue, settings):
 def signed_regions(z, before, settings):
     """The regions of z and of −z, each without the echoes of the other."""
     up = regions(z, settings.region_z, before)
-    down = regions(-z, settings.region_z, before)
+    down = regions(z, settings.region_z, before, sign=-1)
     return drop_echoes(*up, *down, settings), drop_echoes(*down, *up, settings)
 
 
@@ -238,6 +302,7 @@ def detect(stack, electrode, settings, keep_dff=True):
     frames = stack[first : len(stack) - settings.last_frames].astype(np.float32)
     tissue = tissue_mask(resting_brightness(stack, settings), electrode, settings)
     d = bleach_corrected(frames, settings)
+    del frames
     noise = pixel_noise(d, tissue)
     d = despiked(d, tissue, settings)
     z, before = z_movie(d, tissue, settings)

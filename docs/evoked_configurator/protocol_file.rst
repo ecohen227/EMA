@@ -3,7 +3,7 @@ The protocol file
 
 A protocol is one JSON file. Your protocols are kept in the ``protocols``
 folder of the EMA program folder, one file per protocol, named after it;
-the built-in ones are in ``ema/evoked/presets``. The files are plain text
+the built-in ones are in ``ema/evoked/built_in``. The files are plain text
 and can be read in any editor, but use the configurator to change them: it
 checks every change.
 
@@ -92,8 +92,7 @@ An example, the built-in 2P protocol:
      - ``measures``: names from the spatial table in :doc:`measures`;
        ``pulses``: the pulses they are measured on; ``near_to_far``: the
        comparisons also measured as near-to-far indices; ``settings``: the
-       settings of the maps and rings, by their names in
-       ``ema/evoked/metrics.py``.
+       settings of the maps and rings (see below).
    * - ``slice_summary``
      - ``statistics`` (any of ``"min"``, ``"max"``, ``"mean"``),
        ``condition_range`` (``[low, high]`` or ``null``),
@@ -104,6 +103,40 @@ An example, the built-in 2P protocol:
 
 Frame 0 is the second frame of the TIFF: the first is dropped when a
 recording is read.
+
+The settings of the maps and rings under ``spatial.settings``, with their
+names on the *Spatial* tab (see :doc:`measures` for what each does):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 35 65
+
+   * - Name in the file
+     - Setting
+   * - ``frames_before_peak``
+     - Frames before the peak
+   * - ``frames_from_peak``
+     - Frames from the peak on
+   * - ``smoothing_px``
+     - Spatial smoothing
+   * - ``pixel_um``
+     - Pixel size
+   * - ``max_radius_um``
+     - Largest ring
+   * - ``integrate_um``
+     - Integration radius
+   * - ``tail_from_um``
+     - Tail radius
+   * - ``region_um``
+     - Region radius
+   * - ``near_from_um``, ``near_to_um``
+     - Near band from, up to
+   * - ``far_from_um``, ``far_to_um``
+     - Far band from, up to
+   * - ``exclude_electrode``
+     - Leave out the electrode
+   * - ``follow_ms``
+     - Follow the decay for at most
 
 Reading a protocol from Python
 ------------------------------
@@ -127,6 +160,8 @@ Reading a protocol from Python
 
    # the spatial measures need the whole movie, the ROI centre and the electrode mask
    from ema.evoked.spatial import measure_spatial
+   from ema.evoked.traces import make_movie
+   movie = make_movie(protocol, stimulated_movie, partner_movie)  # both (frames, rows, columns)
    spatial = measure_spatial(protocol, movie, (67, 78), electrode_mask, measurement)
    print(spatial.values)
 

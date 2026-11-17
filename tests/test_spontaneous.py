@@ -8,21 +8,22 @@ import pytest
 from PyQt5.QtWidgets import QApplication
 
 from ema import user_settings
-from ema.spontaneous import detector as library
+from ema.spontaneous import presets
 from ema.spontaneous.detection import drop_echoes, kernel, template, tissue_mask, detect
-from ema.spontaneous.detector import Detector, detector_v5
+from ema.spontaneous.detector import Detector
+from ema.library import file_name
+from ema.spontaneous.catalogue import EVENT_KEYS, RECORDING_KEYS, SLICE_KEYS
 from ema.spontaneous.measure_details import EVENT_DETAILS, RECORDING_DETAILS, SLICE_DETAILS
 from ema.spontaneous.measures import (
-    EVENT_KEYS,
-    RECORDING_KEYS,
-    SLICE_KEYS,
     TRACE_BEFORE,
     clustering_index,
     measure_events,
     measure_recording,
+    summarise_events,
     summarise_slice,
     time_course,
 )
+from ema.spontaneous.presets import LIBRARY, standard_detector
 from ema.spontaneous.settings import DetectorSettings
 
 FRAME_MS = 4.849
@@ -157,13 +158,13 @@ def test_slice_summaries():
     tissue = np.ones((128, 128), bool)
     recordings = [dict(events=3, **{"searched time": 6.0, "tissue area": 4.0, "sign-flipped": 1, "time-reversed": 0}),
                   dict(events=1, **{"searched time": 6.0, "tissue area": 4.0, "sign-flipped": 0, "time-reversed": 0})]
-    base = {"distance to the release centre": 300.0, "electrode side": 1.0, "size": 0.5, "width": 150.0}
+    base = {"distance to the ROI centre": 300.0, "electrode side": 1.0, "size": 0.5, "width": 150.0}
     events = [(0, dict(base, x=100.0, y=100.0, onset=1.0)), (0, dict(base, x=150.0, y=100.0, onset=1.5)),
               (0, dict(base, x=1500.0, y=1500.0, onset=5.0)), (1, dict(base, x=120.0, y=110.0, onset=2.0, width=250.0))]
-    found = summarise_slice(recordings, events, settings, tissue, (64, 64), ["median", "max"], ["width"])
+    found = {**summarise_slice(recordings, events, settings, tissue), **summarise_events([e for _, e in events], ["width"], ["median", "max"])}
     assert found["events"] == 4 and found["rate"] == pytest.approx(4 / 0.2)
     assert found["rate above the sign-flip floor"] == pytest.approx(3 / 0.2) and found["sign-flipped share"] == 0.25
-    assert found["share near the release centre"] == 1.0 and found["share on the electrode side"] == 1.0
+    assert found["share near the ROI centre"] == 1.0 and found["share on the electrode side"] == 1.0
     assert found["recurring sites"] == 1 and found["share at recurring sites"] == 0.75
     assert found["share together"] == 0.5  # 1.0 and 1.5 s are within 1 s of each other; 5.0 and 2.0 are alone
     assert found["clustering index"] < 0.5
@@ -195,30 +196,30 @@ def test_every_setting_has_a_label_and_help():
 
 
 def test_detector_file_round_trip_and_presets(tmp_path):
-    detector = detector_v5()
+    detector = standard_detector()
     detector.settings.event_z = 7.5
     path = tmp_path / "mine.json"
     detector.save(path)
     assert Detector.load(path) == detector
     assert json.loads(path.read_text(encoding="utf-8"))["format"] == "EMA spontaneous detector"
-    for make in library.PRESETS:
-        assert Detector.load(library.PRESETS_FOLDER / library.file_name(make().name)) == make(), "run python -m ema.spontaneous.detector"
+    for make in presets.PRESETS:
+        assert Detector.load(presets.BUILT_IN / file_name(make().name)) == make(), "run python -m ema.spontaneous.presets"
 
 
 def test_searched_files_are_the_unstimulated_ones_without_skip_words(tmp_path):
     names = ["100uA.tif", "no1.tif", "No2.tif", "no3 red.tif", "hi1.tif", "no4_test.tif"]
-    detector = detector_v5()
+    detector = standard_detector()
     detector.skip_words = ["red", "test"]
     assert [p.name for p in detector.searched_files([tmp_path / n for n in names])] == ["no1.tif", "No2.tif"]
 
 
 def test_library_lists_built_in_then_saved(tmp_path):
-    detector = detector_v5()
+    detector = standard_detector()
     detector.name = "Mine"
-    library.save_in_library(detector, tmp_path)
-    names = [e.name for e in library.entries(tmp_path)]
-    assert names == ["Detector v5", "Mine"]
-    assert library.is_taken("mine", tmp_path)
+    LIBRARY.in_folder(tmp_path).save(detector)
+    names = [e.name for e in LIBRARY.in_folder(tmp_path).entries()]
+    assert names == ["Standard detector", "Mine"]
+    assert LIBRARY.in_folder(tmp_path).is_taken("mine")
 
 
 # ---------------------------------------------------------------------------
@@ -246,14 +247,14 @@ def test_the_configurator_searches_an_example_recording(app, tmp_path):
     stack = movie()
     tifffile.imwrite(folder / "no1.tif", np.concatenate([stack[:1], stack]).clip(0, 65535).astype(np.uint16))
     window = SpontaneousConfiguratorWindow(user_folder=tmp_path / "detectors")
-    assert window.library_box.count() == 1 and not window.delete_button.isEnabled()
+    assert window.bar.box.count() == 1 and not window.bar.buttons["Delete"].isEnabled()
     window.use_example_folder(folder, None)
     window.worker.wait()
     app.processEvents()
     assert window.status.text().startswith("no1.tif: <b>2 events</b>")
     assert window.table.rowCount() == 2
     window.form.inputs["event_z"].setValue(500.0)
-    assert "press Search" in window.status.text() and window.unsaved
+    assert "press Search" in window.status.text() and window.bar.unsaved
     window.form.inputs["good_fit_r2"].setValue(0.99)  # a measuring setting: measured again at once
-    window.saved = window.detector.to_dict()
+    window.bar.saved = window.detector.to_dict()
     window.close()

@@ -1,9 +1,14 @@
-"""The built-in protocols, written as code so that their numbers can be checked.
+"""The built-in protocols, written as code so that their numbers can be checked, and the protocol library.
 
-Run `python -m ema.evoked.presets` to write them to `ema/evoked/presets/`.
+After changing a built-in protocol, run `python -m ema.evoked.presets` to write
+them to `ema/evoked/built_in/` (a test checks that the files match the code).
 """
 
-from .library import PRESETS_FOLDER, file_name
+from pathlib import Path
+
+from ..library import Library, file_name
+from ..paths import USER_PROTOCOLS
+from ..recordings import FRAME_MS
 from .protocol import (
     AS_LISTED,
     EVERY,
@@ -23,7 +28,8 @@ from .protocol import (
     Window,
 )
 
-FRAME_MS = 4.849
+BUILT_IN = Path(__file__).parent / "built_in"
+LIBRARY = Library("protocol", Protocol.load, BUILT_IN, USER_PROTOCOLS)
 
 
 def paired_pulse(corrected=True):
@@ -124,11 +130,11 @@ PRESETS = [paired_pulse, paired_pulse_uncorrected, pulse_train]
 
 
 def write_presets():
-    PRESETS_FOLDER.mkdir(exist_ok=True)
+    BUILT_IN.mkdir(exist_ok=True)
     for make in PRESETS:
         protocol = make()
         assert not protocol.problems(), protocol.problems()
-        protocol.save(PRESETS_FOLDER / file_name(protocol.name))
+        protocol.save(BUILT_IN / file_name(protocol.name))
         print("wrote", file_name(protocol.name))
 
 

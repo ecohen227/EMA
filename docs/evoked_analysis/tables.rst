@@ -1,5 +1,5 @@
-The two Excel files
-===================
+The evoked Excel files
+======================
 
 Every run writes two files into the output folder:
 
@@ -21,11 +21,15 @@ What is in each file
 
    * - Sheet
      - What it holds
-   * - **Recordings** (or **Slices**)
+   * - **Recordings**
      - Everything in one table: the folder, the recording and its partner,
-       the labels, the condition, then one column per measure, with its
+       the labels, the condition, *ROI reviewed* (yes when the folder was
+       reviewed in ROI Selection), then one column per measure, with its
        unit. Use it in Excel, R or Python, or in a Prism *Multiple
        variables* table.
+   * - **Slices** (per-slice file)
+     - The same for slices: the folder, the labels, *Recordings measured*,
+       *ROI reviewed*, then one column per per-slice measure.
    * - one sheet per measure
      - The same numbers laid out to paste into Prism (below). ``/`` in a
        name becomes ``÷`` (``P2÷P1``).
@@ -43,11 +47,11 @@ The start of the *Recordings* sheet of the example (some of its columns):
 Per recording: Prism grouped tables
 -----------------------------------
 
-Each measure sheet of ``Evoked per recording.xlsx`` has one row per
-condition (each current), a group of columns per group of slices (here
-WT CTRL, WT IFN, HET CTRL and HET IFN), and one column per slice. Rows 1
-and 2 give the measure with its unit and how to paste it; the *P1 response*
-sheet of the example from row 3 on:
+Each measure sheet of ``Evoked per recording.xlsx`` is a
+:term:`grouped table`: one row per :term:`condition` (each current), a
+group of columns per group of slices (here WT CTRL, WT IFN, HET CTRL and
+HET IFN), and one column per slice. Rows 1 and 2 give the measure with its unit and how to
+paste it; the *P1 response* sheet of the example from row 3 on:
 
 .. include:: ../_generated/example_prism_recording.rst
 
@@ -64,7 +68,8 @@ Smaller groups are padded with empty columns, so every group is as wide as
 the largest. A slice keeps its column in every row.
 
 The rows are the conditions only: a recording whose name does not start
-with a number is on the *Recordings* sheet only. When a slice has two
+with a number is on the *Recordings* sheet only. (When no recording has a
+condition, the rows are the file names instead.) When a slice has two
 recordings with the same condition, such as ``50uA.tif`` and
 ``50uA (2).tif``, the sheet shows the plainest name, ``50uA.tif``; to use
 the other one, flag ``50uA.tif`` in ROI Selection. The *Notes* sheet lists
@@ -73,8 +78,8 @@ both cases.
 Per slice: Prism column tables
 ------------------------------
 
-Each measure sheet of ``Evoked per slice.xlsx`` has one column per group
-and one value per slice. The *P1 response mean 100-400* sheet of the
+Each measure sheet of ``Evoked per slice.xlsx`` is a :term:`column table`:
+one column per group and one value per slice. The *P1 response mean 100-400* sheet of the
 example from row 3 on:
 
 .. include:: ../_generated/example_prism_slice.rst

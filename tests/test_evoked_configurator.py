@@ -6,8 +6,8 @@ from matplotlib.backend_bases import MouseEvent
 from PyQt5.QtWidgets import QApplication, QFileDialog, QInputDialog, QMessageBox
 
 from ema import user_settings
-from ema.evoked import library
-from ema.evoked.metrics import KINETIC_KEYS
+from ema.evoked.presets import LIBRARY
+from ema.evoked.catalogue import KINETIC_KEYS
 from ema.evoked.protocol import (
     AS_LISTED,
     DOUBLE,
@@ -45,7 +45,7 @@ def window(app, tmp_path, io_folder):
     window.resize(1400, 800)
     window.show()
     yield window
-    window.saved = window.protocol.to_dict()  # close without the unsaved-changes question
+    window.bar.saved = window.protocol.to_dict()  # close without the unsaved-changes question
     window.close()
 
 
@@ -74,9 +74,9 @@ def drag(plot, start, end, height):
 
 
 def test_opens_on_the_first_built_in_protocol(window):
-    assert window.protocol.name == "2P paired pulse" and window.entry.built_in
-    assert not window.unsaved and not window.delete_button.isEnabled()
-    assert window.library_box.count() == 3
+    assert window.protocol.name == "2P paired pulse" and window.bar.entry.built_in
+    assert not window.bar.unsaved and not window.bar.buttons["Delete"].isEnabled()
+    assert window.bar.box.count() == 3
 
 
 def test_example_measures_the_stimulated_recordings(window):
@@ -106,7 +106,7 @@ def test_editing_a_window_remeasures_and_marks_unsaved(window):
     before = window.measurement.values["B1"]
     window.protocol.baselines["B1"] = Window(60, 75)
     window.protocol_changed(False)
-    assert window.unsaved and "not saved" in window.state.text()
+    assert window.bar.unsaved and "not saved" in window.bar.state.text()
     assert window.measurement.values["B1"] != before
 
 
@@ -115,7 +115,7 @@ def test_dragging_a_baseline_edge_and_a_peak_window(window):
     assert window.protocol.baselines["B1"] == Window(81, 99)
     drag(window.plot, 150, 160, 0.8)  # inside P1, in the upper half: moves it
     assert window.protocol.pulse("P1").peak == Window(93, 215)
-    assert window.unsaved
+    assert window.bar.unsaved
 
 
 def test_dragging_a_stimulus(window):
@@ -189,7 +189,7 @@ def test_times_can_be_shown_in_ms(app):
 
 
 def test_place_pulses_dialog_starts_from_the_protocol(window):
-    window.open_entry(2)  # 11P
+    window.bar.open(2)  # 11P
     dialog = PlacePulsesDialog(window.protocol, window.units)
     first, count, interval, peak, baseline, shared = dialog.values()
     assert (first, count, peak, baseline, shared) == (103, 10, 19, 18, True)
@@ -205,52 +205,52 @@ def test_place_pulses_dialog_starts_from_the_protocol(window):
 def test_saving_a_built_in_protocol_asks_for_a_new_name(window, monkeypatch, tmp_path):
     answer(monkeypatch, reply="My 2P")
     window.protocol.baselines["B1"] = Window(70, 90)
-    assert window.save()
+    assert window.bar.save()
     assert (tmp_path / "protocols" / "My 2P.json").is_file()
-    assert window.entry.name == "My 2P" and not window.entry.built_in and not window.unsaved
-    assert window.delete_button.isEnabled() and window.library_box.currentText() == "My 2P"
+    assert window.bar.entry.name == "My 2P" and not window.bar.entry.built_in and not window.bar.unsaved
+    assert window.bar.buttons["Delete"].isEnabled() and window.bar.box.currentText() == "My 2P"
     assert Protocol.load(tmp_path / "protocols" / "My 2P.json").baselines["B1"] == Window(70, 90)
-    assert library.entries(None)[0].load().baselines["B1"] == Window(81, 93)  # the built-in one is unchanged
+    assert LIBRARY.load(LIBRARY.entries()[0].path).baselines["B1"] == Window(81, 93)  # the built-in one is unchanged
 
 
 def test_a_name_that_is_taken_is_asked_again(window, monkeypatch):
     replies = iter([("2P paired pulse", True), ("Another", True)])
     monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: next(replies))
     monkeypatch.setattr(QMessageBox, "information", lambda *args: None)
-    assert window.save_as() and window.entry.name == "Another"
+    assert window.bar.save_as() and window.bar.entry.name == "Another"
 
 
 def test_a_protocol_with_problems_is_not_saved(window, monkeypatch, tmp_path):
     warnings = answer(monkeypatch, reply="Broken")
     window.protocol.pulse("P1").baseline = "nothing"
-    assert not window.save()
+    assert not window.bar.save()
     assert "Cannot save" not in warnings[-1] and "nothing" in warnings[-1]
     assert not (tmp_path / "protocols" / "Broken.json").exists()
 
 
 def test_renaming_a_saved_protocol_replaces_its_file(window, monkeypatch, tmp_path):
     answer(monkeypatch, reply="First name")
-    window.save()
+    window.bar.save()
     window.protocol.name = "Second name"
-    window.save()
+    window.bar.save()
     assert [p.name for p in (tmp_path / "protocols").iterdir()] == ["Second name.json"]
 
 
 def test_delete(window, monkeypatch, tmp_path):
     answer(monkeypatch, reply="Temporary")
-    window.save()
-    window.delete()
+    window.bar.save()
+    window.bar.delete()
     assert not (tmp_path / "protocols" / "Temporary.json").exists()
-    assert window.protocol.name == "2P paired pulse" and window.library_box.count() == 3
+    assert window.protocol.name == "2P paired pulse" and window.bar.box.count() == 3
 
 
 def test_switching_protocol_asks_about_unsaved_changes(window, monkeypatch):
     window.protocol.baselines["B1"] = Window(70, 90)
     answer(monkeypatch, button=QMessageBox.Cancel)
-    window.choose_entry(2)
+    window.bar.choose(2)
     assert window.protocol.name == "2P paired pulse"
     answer(monkeypatch, button=QMessageBox.Discard)
-    window.choose_entry(2)
+    window.bar.choose(2)
     assert window.protocol.name == "11P pulse train"
 
 
@@ -262,9 +262,9 @@ def test_new_protocol_comes_from_the_template_form(window, monkeypatch):
         return True
 
     monkeypatch.setattr(TemplateDialog, "exec_", fill_in)
-    window.new_protocol()
+    window.bar.new()
     protocol = window.protocol
-    assert window.entry is None and window.unsaved and window.library_box.currentText() == "My train  (not saved)"
+    assert window.bar.entry is None and window.bar.unsaved and window.bar.box.currentText() == "My train  (not saved)"
     assert [p.name for p in protocol.pulses] == ["P1", "P2", "P3", "P4", "P5", "P6"]
     assert protocol.pulse("P6").per_recording and protocol.windows_follow_condition
     assert [r.condition for r in protocol.recordings] == [500, 1000, 2500, 5000]
@@ -304,7 +304,7 @@ def test_template_builds_both_shapes():
 
 
 def test_changing_a_delay_moves_that_recordings_windows(window):
-    window.open_entry(2)  # 11P: its recovery windows follow the delay
+    window.bar.open(2)  # 11P: its recovery windows follow the delay
     recording = window.protocol.recordings[0]
     before = recording.pulses["P11"].peak
     window.protocol.set_condition(recording, 1000.0)  # 500 ms later: 103 frames
@@ -358,9 +358,9 @@ def test_spatial_tab_survives_switching_protocols(window):
     # once failed with "'NoneType' object has no attribute 'get_position'" and a KeyError on the colour bar
     window.protocol.spatial_measures = ["footprint width"]
     window.tabs.setCurrentIndex(3)
-    for step in (lambda: window.choose_entry(2), lambda: window.tabs.setCurrentIndex(0),
-                 lambda: window.tabs.setCurrentIndex(3), lambda: window.choose_entry(0)):
-        window.saved = window.protocol.to_dict()  # nothing unsaved to ask about
+    for step in (lambda: window.bar.choose(2), lambda: window.tabs.setCurrentIndex(0),
+                 lambda: window.tabs.setCurrentIndex(3), lambda: window.bar.choose(0)):
+        window.bar.saved = window.protocol.to_dict()  # nothing unsaved to ask about
         step()
         window.plot.draw()
         window.spatial_view.canvas.draw()
@@ -379,13 +379,13 @@ def test_export_and_import(window, monkeypatch, tmp_path):
     exported = tmp_path / "shared" / "exported.json"
     exported.parent.mkdir()
     monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *a, **k: (str(exported), ""))
-    window.export()
+    window.bar.export()
     assert Protocol.load(exported).name == "2P paired pulse"
 
     monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a, **k: (str(exported), ""))
     answer(monkeypatch, reply="2P from a colleague")  # the name is taken by the built-in one
-    window.import_protocol()
-    assert window.entry.name == "2P from a colleague" and (tmp_path / "protocols" / "2P from a colleague.json").is_file()
+    window.bar.import_file()
+    assert window.bar.entry.name == "2P from a colleague" and (tmp_path / "protocols" / "2P from a colleague.json").is_file()
 
 
 def test_per_recording_pulse_is_drawn_and_dragged_for_the_example_recording(window, train_folder, monkeypatch):
@@ -414,7 +414,7 @@ def test_decay_with_distance_is_shown_on_the_spatial_tab(window):
 
 
 def test_fits_across_conditions_from_the_last_tab(window):
-    window.open_entry(2)  # 11P: a recovery pulse set per recording
+    window.bar.open(2)  # 11P: a recovery pulse set per recording
     editor = window.editors[4]
     editor.add_condition_fit()
     fit = window.protocol.condition_fits[0]
@@ -424,6 +424,6 @@ def test_fits_across_conditions_from_the_last_tab(window):
     window.editors[1].rename("P1", "First")  # the fit follows the comparison it uses
     window.editors[4].rename("P11/P1", "Recovered")
     assert window.protocol.condition_fits[0].measure == "Recovered"
-    window.open_entry(0)  # 2P: no pulse set per recording, so an input-output fit
+    window.bar.open(0)  # 2P: no pulse set per recording, so an input-output fit
     window.editors[4].add_condition_fit()
     assert window.protocol.condition_fits[0].model == "saturation"

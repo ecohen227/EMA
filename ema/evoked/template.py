@@ -9,6 +9,7 @@ two fillings of this template (`LIKE`).
 
 from dataclasses import dataclass, field
 
+from ..recordings import FRAME_MS
 from .protocol import (
     AS_LISTED,
     BRIGHTNESS,
@@ -35,7 +36,7 @@ END_OF_TRAIN, LAST_PULSE = "end of the train", "last pulse"
 @dataclass
 class Template:
     name: str = "New protocol"
-    frame_ms: float = 4.849
+    frame_ms: float = FRAME_MS
     trace: str = BRIGHTNESS
     partner: str = RECORDED_AFTER
     first_stimulus: int = 103  # frame

@@ -1,12 +1,14 @@
 ROI Selection
 =============
 
-ROI Selection decides, for every recording folder, **where the response is
-measured** (the ROI, a circle) and **which pixels are hidden by the
-stimulating electrode** (the electrode mask). Both are found automatically.
-You check each folder, correct what you disagree with, and flag recordings
-that fail your criteria. The result is one file that the other EMA packages
-read.
+ROI Selection decides, for every :term:`recording folder`, **where the
+response is measured** (the :term:`ROI`, or region of interest: a circle)
+and **which pixels are hidden by the stimulating electrode** (the
+:term:`electrode mask`). Both are found automatically. You check each
+folder, correct what you disagree with, and :term:`flag` recordings that
+fail your criteria. The result is one file, the :term:`ROI file`, which the
+Evoked Analysis needs and the Spontaneous Event Analysis uses when it is
+there.
 
 .. figure:: ../screenshots/window.png
    :width: 100%

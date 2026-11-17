@@ -27,10 +27,10 @@ app = QApplication([])
 app.setFont(QFont("Segoe UI", 9))
 
 from ema import user_settings
-from ema.evoked.metrics import KINETIC_KEYS, SPATIAL_KEYS
+from ema.evoked.catalogue import KINETIC_KEYS, SPATIAL_KEYS
 from ema.evoked.template import LIKE
 from ema.evoked.workbook import PER_RECORDING, PER_SLICE
-from ema.evoked_analysis.window import AnalysisWindow
+from ema.evoked_analysis.window import EvokedAnalysisWindow
 from ema.spontaneous.workbook import PER_EVENT
 from ema.spontaneous.workbook import PER_SLICE as SPONTANEOUS_PER_SLICE
 from ema.spontaneous_analysis.window import SpontaneousAnalysisWindow
@@ -158,7 +158,7 @@ def configurator_screenshots(recordings, output):
     save(template, "configurator_template.png")
     template.close()
 
-    window.open_entry(2)
+    window.bar.open(2)
     window.use_example_folder(recordings / "11P_at_200uA", None)
     window.tabs.setCurrentIndex(0)
     save(window, "configurator_recordings.png")
@@ -178,8 +178,13 @@ def configurator_screenshots(recordings, output):
     bar = window.editors[4].verticalScrollBar()
     bar.setValue(bar.maximum())  # down to the fits across conditions
     save(window, "configurator_summary.png")
-    window.saved = window.protocol.to_dict()
+    window.bar.saved = window.protocol.to_dict()
     window.close()
+
+
+def shown_as(field, text):
+    """Show a tidy path in a file or folder input without the window reading it (it is made up)."""
+    field.set_path(text)
 
 
 # The made-up study of the Evoked Analysis screenshots and example tables: two slices per group, one folder
@@ -232,14 +237,14 @@ def demo_study(root):
 def analysis_screenshots(output):
     """The Evoked Analysis window at each step, and the two Excel files of the demo study as examples."""
     roi_file = demo_study(output / "demo" / "recordings")
-    window = AnalysisWindow(user_folder=output / "protocols")
+    window = EvokedAnalysisWindow(user_folder=output / "protocols")
     window.resize(1400, 760)
     window.roi_input.path.setText(str(roi_file))
     window.load_roi_file()
     window.output.path.setText(str(output / "demo" / "Evoked 2P"))
     window.output_changed()
-    window.roi_input.path.setText("C:/Users/you/EMA results/roi_selections.json")
-    window.output.path.setText("C:/Users/you/EMA results/Evoked 2P")
+    shown_as(window.roi_input, "C:/Users/you/EMA results/roi_selections.json")
+    shown_as(window.output, "C:/Users/you/EMA results/Evoked 2P")
     window.filter.only_with.setText("input output")
     window.show()
     save(window, "analysis.png")
@@ -250,11 +255,11 @@ def analysis_screenshots(output):
     window.labels_editor.tree.setCurrentItem(window.labels_editor.tree.topLevelItem(2).child(0))
     save(window, "analysis_labels.png")
     window.tabs.setCurrentIndex(0)
-    window.output.path.setText(str(output / "demo" / "Evoked 2P"))
+    shown_as(window.output, str(output / "demo" / "Evoked 2P"))
     window.start()
     window.worker.wait()
     app.processEvents()
-    window.output.path.setText("C:/Users/you/EMA results/Evoked 2P")
+    shown_as(window.output, "C:/Users/you/EMA results/Evoked 2P")
     save(window, "analysis_done.png")
     window.close()
     EXAMPLES.mkdir(exist_ok=True)
@@ -283,7 +288,7 @@ def spontaneous_screenshots(recordings, output):
     window.form.sections["Spatial filter"].heading.click()
     window.show()
     save(window, "spontaneous_configurator.png")
-    window.saved = window.detector.to_dict()
+    window.bar.saved = window.detector.to_dict()
     window.close()
 
 
@@ -320,20 +325,20 @@ def spontaneous_analysis_screenshots(recordings, output):
     window.load_recordings_folder()
     window.roi_input.path.setText(str(root.parent / "roi_selections.json"))
     window.load_roi_file()
-    window.output.path.setText(str(output / "spontaneous_demo" / "Spontaneous v5"))
+    window.output.path.setText(str(output / "spontaneous_demo" / "Spontaneous"))
     window.output_changed()
     window.start()
     window.worker.wait()
     app.processEvents()
-    window.recordings_input.path.setText("C:/Users/you/Recordings")
-    window.roi_input.path.setText("C:/Users/you/EMA results/roi_selections.json")
-    window.output.path.setText("C:/Users/you/EMA results/Spontaneous v5")
+    shown_as(window.recordings_input, "C:/Users/you/Recordings")
+    shown_as(window.roi_input, "C:/Users/you/EMA results/roi_selections.json")
+    shown_as(window.output, "C:/Users/you/EMA results/Spontaneous")
     window.show()
     save(window, "spontaneous_analysis.png")
     window.close()
     EXAMPLES.mkdir(exist_ok=True)
     for name in (PER_EVENT, SPONTANEOUS_PER_SLICE):
-        shutil.copyfile(output / "spontaneous_demo" / "Spontaneous v5" / name, EXAMPLES / ("Example - " + name))
+        shutil.copyfile(output / "spontaneous_demo" / "Spontaneous" / name, EXAMPLES / ("Example - " + name))
         print("saved Example -", name)
 
 

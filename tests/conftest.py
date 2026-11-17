@@ -32,6 +32,18 @@ def make_recording(path, response=0.5, seed=0, clock="10:00:00"):
     tifffile.imwrite(path, movie.clip(0).astype(np.uint16), datetime=stamp)
 
 
+@pytest.fixture(autouse=True)
+def no_unexpected_dialogs(monkeypatch):
+    """A message box a test did not answer fails the test, instead of waiting for a click that never comes."""
+    from PyQt5.QtWidgets import QMessageBox
+
+    def unexpected(*args, **kwargs):
+        raise AssertionError(f"An unexpected message box: {args[1:3]}")
+
+    for name in ("question", "warning", "information", "critical"):
+        monkeypatch.setattr(QMessageBox, name, unexpected)
+
+
 @pytest.fixture(scope="session")
 def recordings(tmp_path_factory):
     """A small study: one slice with a paired-pulse folder, a train folder and a loose reference image."""

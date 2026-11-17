@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QRadioButton,
     QSpinBox,
@@ -20,6 +21,7 @@ from PyQt5.QtWidgets import (
 
 from ..evoked.protocol import AS_LISTED, BRIGHTNESS, NO_PARTNER, RATIO, RECORDED_AFTER
 from ..evoked.template import END_OF_TRAIN, LAST_PULSE, LIKE, Template
+from ..recordings import FRAME_MS
 from .widgets import hint, row_of
 
 
@@ -35,7 +37,7 @@ def ms_box(value, maximum=1e6):
 class TemplateDialog(QDialog):
     """Asks for the few numbers a protocol is built from. `template()` gives them back."""
 
-    def __init__(self, parent=None, name="New protocol", frame_ms=4.849):
+    def __init__(self, parent=None, name="New protocol", frame_ms=FRAME_MS):
         super().__init__(parent)
         self.setWindowTitle("New protocol")
         self.setMinimumWidth(900)
@@ -52,7 +54,8 @@ class TemplateDialog(QDialog):
         for button in (self.brightness, self.ratio):
             traces.addButton(button)
         self.brightness.setChecked(True)
-        self.partner_after = QRadioButton("The unstimulated recording made right after it (from the time stamps)")
+        self.partner_after = QRadioButton("The unstimulated recording made right after it")
+        self.partner_after.setToolTip("Found from the time stamps the camera stores in the files.")
         self.partner_listed = QRadioButton("The one named in the list of recordings")
         self.partner_none = QRadioButton("None: brightness as recorded, without correcting for bleaching")
         partners = QButtonGroup(self)
@@ -73,15 +76,16 @@ class TemplateDialog(QDialog):
         baselines.addButton(self.own)
         self.own.setChecked(True)
 
-        self.recovery = QCheckBox("Add a recovery pulse after the train, at a different delay in each recording")
+        self.recovery = QCheckBox("Add a recovery pulse (a different delay in each recording)")
         self.delays = QLineEdit("500, 1000, 2500, 5000")
         self.delays.setToolTip("Delays in ms, separated by commas: one recording each.")
         self.after = QComboBox()
         self.after.addItems([END_OF_TRAIN, LAST_PULSE])
         self.after.setToolTip("The end of the train is one interval after its last pulse.")
         self.stimulated, self.unstimulated = QLineEdit("hi{n}.tif"), QLineEdit("no{n+1}.tif")
-        self.stimulated.setToolTip("{n} is the recording's number, from 1.")
-        self.unstimulated.setToolTip("{n+1}: the unstimulated recording made right after the stimulated one.")
+        self.stimulated.setToolTip("{n} stands for the recording's number: 1, 2, 3 …")
+        self.unstimulated.setToolTip("{n+1} stands for the number after the stimulated recording's: the unstimulated "
+                                     "recording made right after it.")
         self.summary = QLabel()
         self.summary.setWordWrap(True)
 
@@ -104,7 +108,7 @@ class TemplateDialog(QDialog):
         recovery = QFormLayout()
         recovery.addRow("Delays:", self.delays)
         recovery.addRow("Counted from:", self.after)
-        recovery.addRow("Stimulated files:", self.stimulated)
+        recovery.addRow("Stimulated files (n = 1, 2 …):", self.stimulated)
         recovery.addRow("Unstimulated partners:", self.unstimulated)
         recovery_box = QGroupBox("Recovery pulse")
         recovery_layout = QVBoxLayout(recovery_box)
@@ -222,8 +226,17 @@ class TemplateDialog(QDialog):
             else:
                 recovery = ", ".join(f"{template.recovery_stimulus(d)} ({d:g} ms)" for d in template.recovery_delays_ms)
                 text += f" Recovery pulse at frames {recovery}."
+        if self.stimulated.isEnabled():
+            files = [template.file_name(template.stimulated_files, n) for n in (1, 2)]
+            if self.unstimulated.isEnabled():
+                files = [f"{f} ÷ {template.file_name(template.unstimulated_files, n)}" for n, f in zip((1, 2), files)]
+            text += f" Recordings: {', '.join(files)}, …"
         self.summary.setText(text)
 
     def accept(self):
-        if self.name.text().strip() and (not self.recovery.isChecked() or self.delays_ms()):
+        if not self.name.text().strip():
+            QMessageBox.information(self, "New protocol", "Give the protocol a name.")
+        elif self.recovery.isChecked() and not self.delays_ms():
+            QMessageBox.information(self, "New protocol", "Give the delays of the recovery pulse, in ms, separated by commas.")
+        else:
             super().accept()

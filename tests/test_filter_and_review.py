@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QApplication, QMessageBox
 from ema import user_settings
 from ema.roi_selection import FILE_NAME, FolderSelection, RoiSettings, Selections, detect_folder
 from ema.roi_selection.selections import AUTOMATIC, MANUAL, folder_matches
-from ema.roi_selection.setup_dialog import SettingsForm, SetupDialog
+from ema.roi_selection.setup_dialog import RoiSettingsForm, SetupDialog
 from ema.roi_selection.window import RoiSelectionWindow
 
 IO, TRAIN = "Animal 1/Slice 1/input output", "Animal 1/Slice 1/11p at 200uA"
@@ -146,7 +146,7 @@ def test_window_follows_a_new_filter(app, selections, train_folder, monkeypatch,
 
 
 def test_electrode_settings_are_greyed_out_when_settings_open_without_electrode(app, selections, tmp_path):
-    form = SettingsForm(replace(RoiSettings(), find_electrode=False))
+    form = RoiSettingsForm(replace(RoiSettings(), find_electrode=False))
     assert not form.inputs["electrode_threshold"].isEnabled() and not form.labels["electrode_threshold"].isEnabled()
 
     selections.change_settings(replace(selections.settings, find_electrode=False))
@@ -157,7 +157,7 @@ def test_electrode_settings_are_greyed_out_when_settings_open_without_electrode(
 
 
 def test_settings_sections_start_closed_and_open_on_a_click(app):
-    form = SettingsForm(RoiSettings())
+    form = RoiSettingsForm(RoiSettings())
     assert list(form.sections) == ["ROI", "Timing", "Electrode", "Display"]
     assert all(section.content.isHidden() for section in form.sections.values())
 
@@ -169,7 +169,7 @@ def test_settings_sections_start_closed_and_open_on_a_click(app):
 
 
 def test_closed_section_says_when_a_setting_is_not_at_its_default(app):
-    form = SettingsForm(replace(RoiSettings(), electrode_threshold=0.8, electrode_grow_px=2, roi_radius_px=15))
+    form = RoiSettingsForm(replace(RoiSettings(), electrode_threshold=0.8, electrode_grow_px=2, roi_radius_px=15))
     assert form.sections["Electrode"].heading.text() == "Electrode   (2 changed from the default)"
     assert form.sections["ROI"].heading.text() == "ROI   (1 changed from the default)"
     assert form.sections["Timing"].heading.text() == "Timing"

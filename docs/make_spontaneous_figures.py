@@ -77,7 +77,7 @@ def main():
 
 
 def steps(stack, electrode, s, found):
-    """The template, one pixel's dF/F against the pooled trace, z over time, and each pixel's largest z."""
+    """The event shape, one pixel's dF/F against the pooled trace, the strength over time, and each pixel's strongest signal."""
     frames = stack[s.first_frames : len(stack) - s.last_frames].astype(np.float32)
     tissue = tissue_mask(resting_brightness(stack, s), electrode, s)
     d = despiked(bleach_corrected(frames, s), tissue, s)
@@ -90,9 +90,9 @@ def steps(stack, electrode, s, found):
     t = (np.arange(len(shape)) - before) * s.frame_ms
     plain = kernel(t, s.decay_ms, s.rise_ms)
     axes[0, 0].plot(t, plain / np.sqrt((plain**2).sum()), color="gray", label="dLight shape (12 ms rise, 200 ms decay)")
-    axes[0, 0].plot(t, shape, color="tab:blue", label="template: the shape minus its best straight line")
+    axes[0, 0].plot(t, shape, color="tab:blue", label="the event shape minus its best straight line")
     axes[0, 0].axhline(0, color="black", linewidth=0.5)
-    axes[0, 0].set(xlabel="ms from the onset", ylabel="weight (unit length)", title="1  The time filter (template)")
+    axes[0, 0].set(xlabel="ms from the onset", ylabel="weight (unit length)", title="1  The time filter: the event shape")
     axes[0, 0].legend(fontsize=8)
 
     window = slice(onset - 100, onset + 250)
@@ -107,19 +107,20 @@ def steps(stack, electrode, s, found):
     zt = z[:, int(row), int(col)]
     zms = (np.arange(len(zt)) + before - onset) * s.frame_ms
     axes[1, 0].plot(zms / 1000, zt, color="tab:purple", linewidth=0.8)
-    axes[1, 0].axhline(s.event_z, color="tab:red", linestyle="--", label=f"event threshold θ = {s.event_z:g}")
-    axes[1, 0].axhline(s.region_z, color="tab:orange", linestyle=":", label=f"region threshold = {s.region_z:g}")
-    axes[1, 0].set(xlabel="s from the event's onset", ylabel="z", title="3  z at the event's pixel over the recording")
+    axes[1, 0].axhline(s.event_z, color="tab:red", linestyle="--", label=f"event threshold = {s.event_z:g} × noise")
+    axes[1, 0].axhline(s.region_z, color="tab:orange", linestyle=":", label=f"region threshold = {s.region_z:g} × noise")
+    axes[1, 0].set(xlabel="s from the event's onset", ylabel="strength (× noise)",
+              title="3  Strength at the event's pixel over the recording")
     axes[1, 0].legend(fontsize=8)
 
     image = axes[1, 1].imshow(np.where(tissue, z.max(0), np.nan), cmap="magma", vmin=0, vmax=2 * s.event_z)
-    figure.colorbar(image, ax=axes[1, 1], label="largest z", shrink=0.85)
+    figure.colorbar(image, ax=axes[1, 1], label="strength (× noise)", shrink=0.85)
     if electrode is not None and electrode.any():
         axes[1, 1].contour(electrode, [0.5], colors="cyan", linewidths=1)
     for n, (_, r, c, zv) in enumerate(found.events, start=1):
         axes[1, 1].add_patch(Circle((c, r), 7, fill=False, color="white"))
-        axes[1, 1].annotate(f"{n}: z {zv:.0f}", (c + 8, r - 8), color="white", fontsize=8)
-    axes[1, 1].set(xticks=[], yticks=[], title="4  Each pixel's largest z; events circled")
+        axes[1, 1].annotate(f"{n}: {zv:.0f}× noise", (c + 8, r - 8), color="white", fontsize=8)
+    axes[1, 1].set(xticks=[], yticks=[], title="4  Each pixel's strongest signal; events circled")
     figure.savefig(FIGURES / "spontaneous_steps.png", dpi=120)
     plt.close(figure)
     print("saved spontaneous_steps.png")
@@ -138,7 +139,7 @@ def event_figure(found, events, s):
     axes[0].add_patch(Circle((e["x"] / s.pixel_um, e["y"] / s.pixel_um), half, fill=False, color="white"))
     axes[0].add_patch(Circle((e["x"] / s.pixel_um, e["y"] / s.pixel_um), s.pixels(s.fit_radius_um), fill=False, color="white",
                              linestyle=":"))
-    axes[0].set(xticks=[], yticks=[], title=f"Peak map: width σ {e['width']:.0f} µm, fitted peak {e['fitted peak']:.1f} %\n"
+    axes[0].set(xticks=[], yticks=[], title=f"Peak map: width {e['width']:.0f} µm, fitted peak {e['fitted peak']:.1f} %\n"
                                           "solid: half maximum; dotted: the fit radius")
     trace = event_trace(found, s, onset, int(row), int(col))
     times = (np.arange(len(trace)) - TRACE_BEFORE) * s.frame_ms

@@ -16,7 +16,7 @@ import pytest
 from ema.evoked import measure, summarise
 from ema.evoked.kinetics import kinetics
 from ema.evoked.measures import fit_across_conditions, hill, recovery
-from ema.evoked.metrics import KINETIC_KEYS, SPATIAL_KEYS
+from ema.evoked.catalogue import KINETIC_KEYS, SPATIAL_KEYS
 from ema.evoked.spatial import measure_spatial
 from ema.evoked.presets import TRAIN_PEAKS, paired_pulse, paired_pulse_uncorrected, pulse_train
 from ema.evoked.protocol import BRIGHTNESS, DOUBLE, SATURATION, Comparison, ConditionFit, Fit, Protocol, Pulse, Window

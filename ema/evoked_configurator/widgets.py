@@ -1,4 +1,4 @@
-"""Small widgets the configurator's editors are built from."""
+"""Small widgets the configurator's editors are built from (the ones every window uses are in ema/widgets.py)."""
 
 from PyQt5.QtCore import QEvent, QSize, Qt, pyqtSignal
 from PyQt5.QtWidgets import (
@@ -15,7 +15,10 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-MAX_FRAME = 100_000
+from ..recordings import FRAME_MS
+from ..widgets import MAX_FRAME, hint
+
+__all__ = ["Units", "FrameBox", "name_box", "choice_box", "check_box", "remove_button", "hint", "SideScroll", "Rows", "row_of"]
 
 
 class Units:
@@ -23,7 +26,7 @@ class Units:
 
     def __init__(self):
         self.in_ms = False
-        self.frame_ms = 4.849
+        self.frame_ms = FRAME_MS
 
     @property
     def name(self):
@@ -86,13 +89,6 @@ def remove_button(on_clicked, what):
     button.setToolTip(f"Remove {what}")
     button.clicked.connect(on_clicked)
     return button
-
-
-def hint(text):
-    label = QLabel(text)
-    label.setWordWrap(True)
-    label.setStyleSheet("color: gray")
-    return label
 
 
 class SideScroll(QScrollArea):

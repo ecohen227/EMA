@@ -2,9 +2,9 @@ The ROI file
 ============
 
 ROI Selection saves everything in one file, ``roi_selections.json``, in the
-output folder. The other EMA packages read this file to know where to
-measure and which recordings to leave out. It is plain text (JSON): you can
-open it in any text editor, but there should be no need to edit it by hand.
+output folder. The analyses read this file to know where to measure and
+which recordings to leave out. It is plain text (JSON): you can open it in
+any text editor, but there should be no need to edit it by hand.
 
 The file is rewritten after every change. A new file is written completely
 before it replaces the old one, so a crash cannot leave half a file behind.
@@ -17,7 +17,7 @@ What is in it
    {
      "format": "EMA ROI selections",
      "format_version": 1,
-     "ema_version": "3.0.0a1",
+     "ema_version": "3.0.0a5",
      "saved": "2026-11-14 19:42:10",
      "recordings_folder": "C:/Users/you/Recordings",
      "folder_filter": {"only_with": ["input"], "skip_with": ["4ap", "wash"]},
@@ -64,7 +64,9 @@ What is in it
      - One entry per recording folder. The name is the path of the folder
        inside the recordings folder, with ``/`` between the parts. Folders
        that were never opened or detected, or that the folder filter leaves
-       out, have no entry.
+       out, have no entry. After a settings change, only the folders with
+       something set by hand (a moved ROI, a redrawn electrode or a flag)
+       keep their entry until they are detected again.
    * - ``image_shape``
      - Rows and columns of the recordings.
    * - ``roi``
@@ -73,8 +75,8 @@ What is in it
    * - ``automatic_roi``
      - Where the automatic detection put the ROI, the response there, and
        the recordings whose mean it was found on. Kept even when the ROI is
-       moved. It is ``null`` for a folder that was adjusted by hand and is
-       waiting to be detected again after a settings change.
+       moved. It is ``null`` for a folder that is waiting to be detected
+       again after a settings change.
    * - ``electrode``
      - The electrode mask. ``source`` is ``automatic`` or ``manual``,
        ``pixels`` is its area, ``rows`` lists its pixels (see below).
@@ -116,8 +118,13 @@ Reading the file from Python
            trace = stack[:, roi].mean(axis=1)     # mean brightness in the ROI
 
 ``selection.roi_mask() & ~selection.electrode_mask`` gives the ROI without
-the pixels hidden by the electrode. Whether to leave those pixels out is a
-choice of the analysis, not of ROI Selection: the trace shown in the ROI
-Selection window uses the whole circle.
+the pixels hidden by the electrode. In EMA itself:
+
+* the trace in the ROI Selection window and the trace of the Evoked
+  Analysis use the whole circle, electrode pixels included;
+* the spatial measures of the Evoked Analysis leave the electrode pixels
+  out when *Leave out the electrode* is ticked (the default);
+* the spontaneous-event detector leaves blocks under the electrode out of
+  the searched tissue.
 
 The classes are described in :doc:`../reference`.

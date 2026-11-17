@@ -79,10 +79,7 @@ class Editor(QScrollArea):
         """Rename a baseline, pulse, comparison or fit. False (and a message) if the name cannot be used."""
         if new == old:
             return False
-        taken = set(self.protocol.baselines) | {p.name for p in self.protocol.pulses}
-        taken |= {c.name for c in self.protocol.comparisons} | {f.name for f in self.protocol.fits}
-        taken |= {f.name for f in self.protocol.condition_fits}
-        if not new or new in taken:
+        if not new or new in self.protocol.names():
             QMessageBox.information(self, "Name", f"'{new}' cannot be used: every name must be different and not empty.")
             self.changed.emit(True)  # puts the old name back
             return False
@@ -175,7 +172,7 @@ class RecordingsEditor(Editor):
         self.rows = Rows([])
         self.add_button = QPushButton("Add recording")
         self.add_button.clicked.connect(self.add_recording)
-        self.every_part = row_of("Skip names with:", self.skip_words, stretch=False)
+        self.every_part = row_of("Skip recordings with these words:", self.skip_words, stretch=False)
         self.box(
             "Recordings that are measured",
             self.every,
@@ -198,6 +195,8 @@ class RecordingsEditor(Editor):
             widget.blockSignals(True)
         self.name.setText(p.name)
         self.description.setText(p.description)
+        self.description.setCursorPosition(0)  # show the start of a long description
+        self.description.setToolTip(p.description)
         self.interval.setValue(p.sampling_interval_ms)
         self.brightness.setChecked(p.trace == BRIGHTNESS)
         self.ratio.setChecked(p.trace == RATIO)

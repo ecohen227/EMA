@@ -213,6 +213,9 @@ class LabelsEditor(QWidget):
         label_index, value_index = selected
         label = self.labels.labels[label_index]
         if value_index is None:
+            what = f" and its {len(label.values)} values" if label.values else ""
+            if not self._sure("Remove the label", f"Remove the label {label.name}{what}? This cannot be undone."):
+                return
             del self.labels.labels[label_index]
         else:
             del label.values[list(label.values)[value_index]]
@@ -240,7 +243,13 @@ class LabelsEditor(QWidget):
             label.values = dict(values)
         self._after_change((label.name, values[min(max(target, 0), len(values) - 1)][0]))
 
+    def _sure(self, title, question):
+        return QMessageBox.question(self, title, question) == QMessageBox.Yes
+
     def restore_defaults(self):
+        if not self._sure("Restore the defaults", "Replace your labels with the defaults? Spellings you added (for example "
+                                                  "Contrl for CTRL) are lost. Use More ▾ › Export… first to keep a copy."):
+            return
         defaults = default_labels()
         self.labels.labels, self.labels.ignored = defaults.labels, []
         self._after_change()
@@ -252,8 +261,10 @@ class LabelsEditor(QWidget):
         try:
             data = json.loads(Path(path).read_text(encoding="utf-8"))
             labels = LabelSet.from_dict(data.get("labels") if isinstance(data.get("labels"), dict) else data)
-        except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        except (OSError, ValueError, AttributeError) as error:
             QMessageBox.warning(self, "Import labels", f"{Path(path).name} holds no labels EMA can read.\n\n{error}")
+            return
+        if not self._sure("Import labels", f"Replace your labels with the {len(labels.labels)} labels of {Path(path).name}?"):
             return
         self.labels.labels, self.labels.ignored, self.labels.whole_path = labels.labels, labels.ignored, labels.whole_path
         self.show_labels(self.labels)
@@ -261,8 +272,12 @@ class LabelsEditor(QWidget):
 
     def export_labels(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export labels", "labels.json", "Labels files (*.json)")
-        if path:
+        if not path:
+            return
+        try:
             Path(path).write_text(json.dumps(self.labels.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+        except OSError as error:
+            QMessageBox.warning(self, "Export labels", f"The labels could not be saved.\n\n{error}")
 
     def _whole_path_toggled(self, on):
         self.labels.whole_path = on

@@ -244,7 +244,7 @@ SLICE = [
 
 KINETIC_DETAILS = {
     "time to peak": dict(
-        formula="(peak frame + δ − stimulus frame) × frame interval, with δ = ½ (y₋ − y₊) ÷ (y₋ − 2y₀ + y₊)",
+        formula="(peak frame + δ − stimulus frame) × time between frames, with δ = ½ (y₋ − y₊) ÷ (y₋ − 2y₀ + y₊)",
         method="The peak frame is the frame of the maximum of the smoothed response inside the pulse's peak window; "
                "y₀ is its value and y₋, y₊ those of the frames before and after it. δ places the top of the parabola "
                "through these three points between frames; it is kept between −0.5 and 0.5, and is 0 when the peak "
@@ -257,7 +257,7 @@ KINETIC_DETAILS = {
         example='50.8 ms: the parabola through frames 109, 110 and 111 (45, 50 and 47.5 %) peaks 1/6 frame after frame 110, 10 1/6 frames after the stimulus.'
     ),
     "onset": dict(
-        formula="(t20 − stimulus frame) × frame interval, where t20 is the frame at which the smoothed response, "
+        formula="(t20 − stimulus frame) × time between frames, where t20 is the frame at which the smoothed response, "
                 "going back from its peak, first falls to 20 % of the peak",
         method="From the peak frame back towards the start of the stretch, the first frame at or below 20 % of the peak "
                "is found; the crossing is placed between it and the frame after it by straight-line interpolation.",
@@ -269,17 +269,17 @@ KINETIC_DETAILS = {
         example='10 ms: 20 % of the 50 % peak is reached 2 frames after the stimulus.'
     ),
     "rise 10-90": dict(
-        formula="(t90 − t10) × frame interval, both crossings found going back from the peak as for the onset",
+        formula="(t90 − t10) × time between frames, both crossings found going back from the peak as for the onset",
         method="t10 and t90 are the interpolated frames at which the smoothed response, going back from its peak, "
                "first falls to 10 % and to 90 % of the peak.",
         empty="The response does not fall to 10 % of its peak before the peak within the stretch.",
         meaning="How fast the response rises; with a fast sensor, how synchronous release is.",
-        caveats="Fast rises last only a few frames: a rise shorter than about one frame interval cannot be measured. "
+        caveats="Fast rises last only a few frames: a rise shorter than about one time between frames cannot be measured. "
                 "The 3-frame running mean lengthens short rises. Prefer the 20-80 % rise when the baseline is noisy.",
         example='40 ms: from 5 % (1 frame after the stimulus) to 45 % (9 frames after).'
     ),
     "rise 20-80": dict(
-        formula="(t80 − t20) × frame interval",
+        formula="(t80 − t20) × time between frames",
         method="As for the 10-90 % rise, with 20 % and 80 % of the peak.",
         empty="The response does not fall to 20 % of its peak before the peak within the stretch.",
         meaning="As the 10-90 % rise, less sensitive to noise at the foot and the top of the rise.",
@@ -287,17 +287,17 @@ KINETIC_DETAILS = {
         example='30 ms: from 10 % (2 frames) to 40 % (8 frames).'
     ),
     "max rise slope": dict(
-        formula="max over the rise of (response(k + 1) − response(k)) ÷ frame interval in seconds",
+        formula="max over the rise of (response(k + 1) − response(k)) ÷ time between frames in seconds",
         method="The largest difference between two consecutive frames of the smoothed response from the start of the "
                "stretch to the peak frame, in percent per second.",
         empty="Fewer than two frames between the start of the stretch and the peak.",
         meaning="The fastest increase of the signal: grows with both the amount and the synchrony of release.",
         caveats="Scales with the size of the response; compare it with the response or use the rise times for the "
-                "shape alone. Limited by the sensor's rise and by the frame interval.",
+                "shape alone. Limited by the sensor's rise and by the time between frames.",
         example='1000 %/s: 5 % per 5 ms frame.'
     ),
     "max decay slope": dict(
-        formula="−min over the decay of (response(k + 1) − response(k)) ÷ frame interval in seconds",
+        formula="−min over the decay of (response(k + 1) − response(k)) ÷ time between frames in seconds",
         method="The largest fall between two consecutive frames of the smoothed response from the peak frame to the end "
                "of the peak window, given as a positive number in percent per second.",
         empty="The peak is at the last frame of the stretch.",
@@ -309,7 +309,7 @@ KINETIC_DETAILS = {
         example='500 %/s: 2.5 % per frame.'
     ),
     "half-width": dict(
-        formula="(t50 after the peak − t50 before the peak) × frame interval",
+        formula="(t50 after the peak − t50 before the peak) × time between frames",
         method="The interpolated frames at which the smoothed response falls to half of its peak, going back from the "
                "peak (rise) and going forward from it (decay), within the stretch.",
         empty="The response does not fall to half of its peak on either side within the stretch: in particular when "
@@ -319,7 +319,7 @@ KINETIC_DETAILS = {
         example='75 ms: above 25 % from 5 frames after the stimulus to 10 frames after the peak, 15 frames.'
     ),
     "half-decay": dict(
-        formula="(t50 after the peak − peak frame) × frame interval",
+        formula="(t50 after the peak − peak frame) × time between frames",
         method="As the half-width, on the decay only.",
         empty="The response does not fall to half of its peak before the end of the peak window.",
         meaning="How fast the transmitter is cleared, if the sensor is fast enough; it lengthens when uptake is "
@@ -330,7 +330,7 @@ KINETIC_DETAILS = {
         example='50 ms: 10 frames from the peak to 25 %.'
     ),
     "1/e decay": dict(
-        formula="(t37 after the peak − peak frame) × frame interval, at 1/e = 36.8 % of the peak",
+        formula="(t37 after the peak − peak frame) × time between frames, at 1/e = 36.8 % of the peak",
         method="As the half-decay, at 36.8 % of the peak. For a single exponential decay starting at the peak it "
                "equals the time constant τ.",
         empty="The response does not fall to 36.8 % of its peak before the end of the peak window.",
@@ -339,7 +339,7 @@ KINETIC_DETAILS = {
         example='63.2 ms: 20 × (1 − 1/e) = 12.6 frames from the peak to 18.4 %.'
     ),
     "area": dict(
-        formula="sum of the response over the stretch × frame interval in seconds",
+        formula="sum of the response over the stretch × time between frames in seconds",
         method="The unsmoothed response is summed from the start of the stretch (the stimulus, or the start of the "
                "peak window if that is earlier) to the last frame of the peak window, in percent × seconds.",
         empty="Only for the reasons every kinetic measure can be empty (see 'Stretch' above).",
@@ -468,7 +468,7 @@ SPATIAL_DETAILS = {
                "(at least 3, and at least 30 % of the ring) get the median latency of their pixels.",
         empty="No stimulus frame, or fewer than 10 rings with a median latency.",
         meaning="Whether release starts later far from the centre: a positive slope is a wave travelling outwards.",
-        caveats="Differences are a few ms, near the frame interval. A camera with a rolling shutter records rows at "
+        caveats="Differences are a few ms, near the time between frames. A camera with a rolling shutter records rows at "
                 "slightly different times, which can mimic or hide a slope along the image's vertical axis.",
         example='Release that starts 1 frame (5 ms) later for every 4 pixels (64 µm) from the centre: 78 ms/mm.'
     ),

@@ -1,5 +1,5 @@
-Step by step
-============
+Evoked Analysis Configurator, step by step
+==========================================
 
 1. Choose a protocol
 --------------------
@@ -43,7 +43,8 @@ few numbers and builds the protocol from them.
    The template form, filled in like the 11P protocol.
 
 * **Fill in like 2P / 11P** puts the timing of the built-in protocols into the
-  form. (The built-in protocols themselves use hand-tuned windows.)
+  form. (The built-in protocols' windows differ slightly from the
+  template's.)
 * **The train of pulses**: the frame of the first stimulus, the number of
   pulses and the time between them. Each peak window starts at its stimulus;
   each baseline window ends at its stimulus, or one baseline before the
@@ -124,11 +125,11 @@ Unstimulated partner
 
 Recordings that are measured
    * **Every stimulated recording in the folder**: every recording whose
-     name does not start with ``no``, except those with a word under *Skip
-     names with* (``red`` and ``test`` in the built-in 2P protocols, so
-     ``200uA red.tif`` and ``test stim 200uA.tif`` are left out). Their
-     condition, for example the current, is the number the file name
-     starts with: 300 for ``300uA.tif``.
+     name is not ``no`` and a number, except those with a word under *Skip
+     recordings with these words* (``red`` and ``test`` in the built-in 2P
+     protocols, so ``200uA red.tif`` and ``test stim 200uA.tif`` are left
+     out). Their :term:`condition`, for example the current, is the number
+     the file name starts with: 300 for ``300uA.tif``.
    * **Only these recordings**: a list. Each row gives a file, its
      unstimulated partner (left empty for the one made right after it), its
      condition (for example the delay of the recovery pulse), and the timing
@@ -272,8 +273,8 @@ Fits across conditions
    .. figure:: ../screenshots/configurator_summary.png
       :width: 100%
 
-      The last tab of the 11P protocol, with a recovery fit of P11/P1 whose
-      plateau is fixed at 100 %.
+      The last tab of the 11P protocol after *Add fit across conditions*:
+      a recovery fit of P11/P1 whose plateau is fixed at 100 %.
 
 The line under the tabs says whether the protocol is complete. In red: what
 must be fixed before it can be saved. In orange: what cannot be measured on

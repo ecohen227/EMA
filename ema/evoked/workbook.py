@@ -25,17 +25,22 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment
 
 from .. import __version__
-from ..excel import BOLD, Slice, TablesLocked, save_workbooks
-from ..excel import bold_rows as _bold_rows
-from ..excel import cell as _cell
-from ..excel import finish_table as _finish_table
-from ..excel import groups as _groups
-from ..excel import notes_sheet as _notes_sheet
-from ..excel import sheet_names as _sheet_names
-from ..excel import slices as _slices
-from ..excel import write_title as _title
-
-__all__ = ["PER_RECORDING", "PER_SLICE", "Slice", "TablesLocked", "write_workbooks"]
+from ..excel import (
+    BOLD,
+    bold_rows,
+    cell,
+    column_table,
+    finish_table,
+    grouped_table,
+    groups,
+    heading,
+    label_lines,
+    notes_sheet,
+    save_workbooks,
+    sheet_names,
+    slices,
+    write_title,
+)
 
 PER_RECORDING = "Evoked per recording.xlsx"
 PER_SLICE = "Evoked per slice.xlsx"
@@ -47,15 +52,10 @@ def write_workbooks(analysis):
     Raises TablesLocked if a file cannot be replaced (open in Excel); the
     other file is still written.
     """
-    protocol = analysis.protocol_object()
-    slices = _slices(analysis)
-    books = {PER_RECORDING: _per_recording(analysis, protocol, slices), PER_SLICE: _per_slice(analysis, protocol, slices)}
+    protocol = analysis.protocol()
+    found = slices(analysis)
+    books = {PER_RECORDING: _per_recording(analysis, protocol, found), PER_SLICE: _per_slice(analysis, protocol, found)}
     return save_workbooks(analysis.folder, books)
-
-
-# ---------------------------------------------------------------------------
-# Slices and groups
-# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ def write_workbooks(analysis):
 # ---------------------------------------------------------------------------
 
 
-def _per_recording(analysis, protocol, slices):
+def _per_recording(analysis, protocol, found):
     workbook = Workbook()
     measures = [m for m in protocol.measures() if m.per == "recording"]
     label_names = analysis.labels.names()
@@ -72,50 +72,51 @@ def _per_recording(analysis, protocol, slices):
     sheet = workbook.active
     sheet.title = "Recordings"
     header = ["Folder", "Recording", *partner, *label_names, protocol.condition_label, "ROI reviewed"]
-    sheet.append(header + [_heading(m) for m in measures])
-    for item in slices:
+    sheet.append(header + [heading(m.name, m.unit) for m in measures])
+    for item in found:
         for recording in _ordered(item.result.recordings):
             row = [item.result.name, recording.file] + ([recording.partner] if partner else [])
             row += [item.labels[name] for name in label_names]
             row += [recording.condition, "yes" if item.result.reviewed else "no"]
-            sheet.append(row + [_cell(recording.values.get(m.name)) for m in measures])
-    _finish_table(sheet, len(header))
+            sheet.append(row + [cell(recording.values.get(m.name)) for m in measures])
+    finish_table(sheet, len(header))
 
-    notes = []
-    names = _sheet_names(m.name for m in measures)
-    groups = _groups(analysis, slices)
-    width = max((len(members) for members in groups.values()), default=1)
-    rows = _condition_rows(slices)
-    for item in slices:
-        notes += _row_notes(item, _with_conditions(slices))
+    names = sheet_names(m.name for m in measures)
+    by_group = groups(analysis, found)
+    width = max((len(members) for members in by_group.values()), default=1)
+    with_conditions = _with_conditions(found)
+    rows = _condition_rows(found, with_conditions)
+    by_row = {item.key: _by_row(item) for item in found}
+    notes = [note for item in found for note in _row_notes(item, with_conditions)]
     for measure in measures:
         sheet = workbook.create_sheet(names[measure.name])
-        _title(sheet, _heading(measure), f"Prism: Grouped table, {width} replicates side by side. Copy from A5 to the "
-               "last value; paste at the first row title.")
-        top = ["" for _ in range(1 + width * len(groups))]
-        names_row = [protocol.condition_label] + [""] * (width * len(groups))
-        for g, (group, members) in enumerate(groups.items()):
+        write_title(sheet, heading(measure.name, measure.unit), f"Prism: Grouped table, {width} replicates side by side. "
+                    "Copy from A5 to the last value; paste at the first row title.")
+        top = ["" for _ in range(1 + width * len(by_group))]
+        names_row = [protocol.condition_label] + [""] * (width * len(by_group))
+        for g, (group, members) in enumerate(by_group.items()):
             top[1 + g * width] = group
             for s, member in enumerate(members):
                 names_row[1 + g * width + s] = member.short_name
         sheet.append(top)
         sheet.append(names_row)
-        for row_key, title in rows:
-            line = [title]
-            for members in groups.values():
-                values = [_cell(_value_at(member, row_key, measure.name)) for member in members]
+        for row_key in rows:
+            line = [row_key]
+            for members in by_group.values():
+                recordings = [by_row[member.key].get(row_key) for member in members]
+                values = [cell(r.values.get(measure.name)) if r is not None else None for r in recordings]
                 line += values + [None] * (width - len(values))
             sheet.append(line)
-        _bold_rows(sheet, (3, 4))
+        bold_rows(sheet, (3, 4))
         sheet.freeze_panes = "B5"
 
-    notes += _notes(slices, per_recording=True)
-    _notes_sheet(workbook, notes)
-    _about_sheet(workbook, analysis, protocol, measures, "recording")
+    notes += _notes(found, per_recording=True)
+    notes_sheet(workbook, notes)
+    _about_sheet(workbook, analysis, protocol, measures)
     return workbook
 
 
-def _per_slice(analysis, protocol, slices):
+def _per_slice(analysis, protocol, found):
     workbook = Workbook()
     measures = [m for m in protocol.measures() if m.per == "slice"]
     label_names = analysis.labels.names()
@@ -123,59 +124,34 @@ def _per_slice(analysis, protocol, slices):
     sheet = workbook.active
     sheet.title = "Slices"
     header = ["Folder", *label_names, "Recordings measured", "ROI reviewed"]
-    sheet.append(header + [_heading(m) for m in measures])
-    for item in slices:
+    sheet.append(header + [heading(m.name, m.unit) for m in measures])
+    for item in found:
         row = [item.result.name] + [item.labels[name] for name in label_names]
         row += [len(item.result.recordings), "yes" if item.result.reviewed else "no"]
-        sheet.append(row + [_cell(item.result.summary.get(m.name)) for m in measures])
-    _finish_table(sheet, len(header))
+        sheet.append(row + [cell(item.result.summary.get(m.name)) for m in measures])
+    finish_table(sheet, len(header))
     if not measures:
         sheet.append([])
-        sheet.append(["The protocol has no per-slice measures. Choose them in the configurator, under Summary."])
+        sheet.append(["The protocol has no per-slice measures. Choose them in the configurator, on the tab "
+                      "Comparisons and summary."])
 
-    names = _sheet_names(m.name for m in measures)
+    names = sheet_names(m.name for m in measures)
     rows_label = analysis.labels.label(analysis.slice_rows_by) if analysis.slice_rows_by not in analysis.group_by else None
-    groups = _groups(analysis, slices)
+    by_group = groups(analysis, found)
     for measure in measures:
         sheet = workbook.create_sheet(names[measure.name])
+        title = heading(measure.name, measure.unit)
         if rows_label is None:
-            _column_table(sheet, measure, groups)
+            columns = {group: [m.result.summary.get(measure.name) for m in members] for group, members in by_group.items()}
+            column_table(sheet, title, columns)
         else:
-            _grouped_by_label(sheet, measure, groups, rows_label, slices)
+            pairs = {group: [(m.labels[rows_label.name], m.result.summary.get(measure.name)) for m in members]
+                     for group, members in by_group.items()}
+            grouped_table(sheet, title, rows_label, pairs)
 
-    _notes_sheet(workbook, _notes(slices, per_recording=False))
-    _about_sheet(workbook, analysis, protocol, measures, "slice")
+    notes_sheet(workbook, _notes(found, per_recording=False))
+    _about_sheet(workbook, analysis, protocol, measures)
     return workbook
-
-
-def _column_table(sheet, measure, groups):
-    _title(sheet, _heading(measure), "Prism: Column table. Copy from A4 to the last value; paste at the first value.")
-    sheet.append(list(groups))
-    columns = [[_cell(m.result.summary.get(measure.name)) for m in members] for members in groups.values()]
-    for i in range(max((len(c) for c in columns), default=0)):
-        sheet.append([column[i] if i < len(column) else None for column in columns])
-    _bold_rows(sheet, (3,))
-    sheet.freeze_panes = "A4"
-
-
-def _grouped_by_label(sheet, measure, groups, label, slices):
-    values = sorted({s.labels[label.name] for s in slices}, key=label.sort_key)
-    width = max((sum(m.labels[label.name] == v for m in members) for members in groups.values() for v in values), default=1)
-    _title(sheet, _heading(measure), f"Prism: Grouped table, {width} replicates side by side. Copy from A5 to the "
-           "last value; paste at the first row title.")
-    top = [""] * (1 + width * len(groups))
-    for g, group in enumerate(groups):
-        top[1 + g * width] = group
-    sheet.append(top)
-    sheet.append([label.name])
-    for value in values:
-        line = [value or f"(no {label.name})"]
-        for members in groups.values():
-            cells = [_cell(m.result.summary.get(measure.name)) for m in members if m.labels[label.name] == value]
-            line += cells + [None] * (width - len(cells))
-        sheet.append(line)
-    _bold_rows(sheet, (3, 4))
-    sheet.freeze_panes = "B5"
 
 
 # ---------------------------------------------------------------------------
@@ -196,24 +172,24 @@ def _ordered(recordings):
     return sorted(recordings, key=lambda r: (r.condition is None, r.condition or 0, len(Path(r.file).stem), r.file.lower()))
 
 
-def _with_conditions(slices):
+def _with_conditions(found):
     """True when any recording has a condition: the rows of the measure sheets are then the conditions only."""
-    return any(r.condition is not None for s in slices for r in s.result.recordings)
+    return any(r.condition is not None for s in found for r in s.result.recordings)
 
 
-def _condition_rows(slices):
-    """(row key, row title) of every condition of any slice, in order; file names when no recording has a condition."""
-    if _with_conditions(slices):
-        keys = sorted({r.condition for s in slices for r in s.result.recordings if r.condition is not None})
-    else:
-        keys = sorted({r.file for s in slices for r in s.result.recordings}, key=str.lower)
-    return [(k, k) for k in keys]
+def _condition_rows(found, with_conditions):
+    """The rows of the measure sheets: every condition of any slice, in order; file names when no recording has one."""
+    if with_conditions:
+        return sorted({r.condition for s in found for r in s.result.recordings if r.condition is not None})
+    return sorted({r.file for s in found for r in s.result.recordings}, key=str.lower)
 
 
-def _value_at(item, row_key, name):
-    """The value of a measure in the slice's recording for this row (the plainest name, if several)."""
-    recording = next((r for r in _ordered(item.result.recordings) if _row_key(r) == row_key), None)
-    return None if recording is None else recording.values.get(name)
+def _by_row(item):
+    """{row: recording} of a slice; of recordings with the same condition, the plainest name."""
+    found = {}
+    for recording in _ordered(item.result.recordings):
+        found.setdefault(_row_key(recording), recording)
+    return found
 
 
 def _row_notes(item, with_conditions):
@@ -238,9 +214,9 @@ def _row_notes(item, with_conditions):
 # ---------------------------------------------------------------------------
 
 
-def _notes(slices, per_recording):
+def _notes(found, per_recording):
     notes = []
-    for item in slices:
+    for item in found:
         notes += [[item.result.name, "", note] for note in item.notes]
         for file, why in item.result.skipped:
             notes.append([item.result.name, file, f"Not measured: {why}"])
@@ -250,9 +226,8 @@ def _notes(slices, per_recording):
     return notes
 
 
-def _about_sheet(workbook, analysis, protocol, measures, per):
+def _about_sheet(workbook, analysis, protocol, measures):
     sheet = workbook.create_sheet("About")
-    labels = analysis.labels
     lines = [
         ("Made by", f"EMA {__version__}, Evoked Analysis, on {datetime.now():%d %B %Y at %H:%M}"),
         ("Protocol", protocol.name),
@@ -261,36 +236,20 @@ def _about_sheet(workbook, analysis, protocol, measures, per):
         ("ROI file", analysis.roi_file),
         ("Slices", f"{sum(bool(r.recordings) for r in analysis.folders.values())} recording folders, one slice each"),
         ("Groups", "Slices are grouped by " + (", ".join(analysis.group_by) if analysis.group_by else "nothing (one group)")),
-        ("Labels", "Read from the folder names of each recording folder, innermost first; the first folder that holds a "
-                   "label gives its value."),
+        *label_lines(analysis.labels),
+        ("Empty cells", "A measure that could not be measured is left empty, never 0. The Notes sheet says why."),
     ]
-    for label in labels.labels:
-        if label.is_number:
-            lines.append(("", f"{label.name}: the number in {', '.join(label.patterns)} (# stands for the number)"))
-        else:
-            spelled = "; ".join(f"{value} = {', '.join(spellings)}" for value, spellings in label.values.items())
-            lines.append(("", f"{label.name}: {spelled}"))
-    lines.append(("Empty cells", "A measure that could not be measured is left empty, never 0. The Notes sheet says why."))
     for key, text in lines:
         sheet.append([key, text])
         sheet.cell(sheet.max_row, 1).font = BOLD
     sheet.append([])
     sheet.append(["Measure", "Unit", "What it is"])
-    _bold_rows(sheet, (sheet.max_row,))
+    bold_rows(sheet, (sheet.max_row,))
     for measure in measures:
         sheet.append([measure.name, measure.unit, measure.explanation])
     sheet.column_dimensions["A"].width = 28
     sheet.column_dimensions["B"].width = 14
     sheet.column_dimensions["C"].width = 110
     for row in sheet.iter_rows():
-        for cell in row:
-            cell.alignment = Alignment(wrap_text=True, vertical="top")
-
-
-# ---------------------------------------------------------------------------
-# Small helpers
-# ---------------------------------------------------------------------------
-
-
-def _heading(measure):
-    return f"{measure.name} ({measure.unit})" if measure.unit else measure.name
+        for item in row:
+            item.alignment = Alignment(wrap_text=True, vertical="top")

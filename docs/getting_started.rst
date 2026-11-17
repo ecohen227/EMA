@@ -11,7 +11,7 @@ Install (once per computer)
 
    .. code-block:: bat
 
-      cd "C:\Users\<you>\Desktop\EMA\EMA_V3"
+      cd "C:\Users\<you>\Desktop\EMA"
 
 3. Install the packages EMA needs. This takes a minute or two and needs internet access.
 
@@ -31,37 +31,25 @@ Start EMA
 Double-click the **EMA** icon on the Desktop, or double-click ``EMA.pyw`` in
 the EMA folder, or run ``python -m ema`` in a terminal.
 
-The start window lists the five packages. Click the one you need. The start
-window comes back when you close the package.
+The start window lists the five packages under two headings, numbered in
+the order you use them:
+
+* **Evoked responses**: 1 ROI Selection, 2 Evoked Analysis Configurator,
+  3 Evoked Analysis;
+* **Spontaneous events**: 1 Spontaneous Event Configurator, 2 Spontaneous
+  Event Analysis, which uses the ROI file of ROI Selection when there is
+  one.
+
+Click the one you need. The start window comes back when you close the
+package. *Documentation* opens these pages.
 
 .. figure:: screenshots/launcher.png
    :width: 420
 
-   The start window. Packages that are not built yet are greyed out.
+   The start window.
 
-What EMA expects
-----------------
+:doc:`The workflow <index>` shows which file each package makes and which
+it uses, and :doc:`recordings` says how your recordings should be named and
+arranged.
 
-Recordings
-   TIFF movies, one file per trial, grouped in folders. A folder that holds
-   at least one TIFF movie is a *recording folder*. In the standard layout
-   that is each ``input output`` folder and each ``11p at …`` folder of a
-   slice.
-
-File names
-   Stimulated trials are named after their current (``200uA.tif``) or
-   ``hi1.tif`` … ``hi4.tif``. Unstimulated trials start with ``no``
-   (``no1.tif``).
-
-Single images
-   TIFF files smaller than 1 MB, such as reference snapshots, are ignored.
-
-EMA never changes your recordings. It only reads them, and it refuses to
-save its own files inside the recordings folder.
-
-Frame numbers
--------------
-
-EMA drops the first frame of every TIFF. So *frame 0* in EMA is the second
-frame of the file. All frame numbers in the settings and in the plots are
-counted this way.
+Next: :doc:`roi_selection/index`.

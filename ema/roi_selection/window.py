@@ -104,6 +104,10 @@ class RoiSelectionWindow(QMainWindow):
         side_layout.addWidget(QLabel("<b>Recording folders</b>"))
         side_layout.addWidget(self.folder_list, 1)
         side_layout.addWidget(self.progress_label)
+        legend = QLabel(f"✓ reviewed   {FLAG} recordings flagged   ⚠ low response\nEvery change is saved at once.")
+        legend.setStyleSheet("color: gray")
+        legend.setToolTip(f"Saved in {FILE_NAME} in the output folder.")
+        side_layout.addWidget(legend)
         side_layout.addWidget(detect_all)
 
         self.recording_box = QComboBox()
@@ -558,11 +562,21 @@ class RoiSelectionWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def accept_and_next(self):
+        """Mark the folder reviewed and go to the next folder that is not reviewed yet."""
         self.selection.reviewed = True
         self.save()
-        if self.folder_list.currentRow() == len(self.folders) - 1:
-            self.status.setText("✓ That was the last folder. Everything is saved in " + str(self.output_folder / FILE_NAME))
-        self.step(+1)
+        row = self.folder_list.currentRow()
+        waiting = [r for r in range(row + 1, len(self.folders)) if not self._reviewed(r)]
+        waiting += [r for r in range(row) if not self._reviewed(r)]
+        if waiting:
+            self.folder_list.setCurrentRow(waiting[0])
+        else:
+            self.status.setText(f"✓ All {len(self.folders)} folders are reviewed and saved in "
+                                f"{self.output_folder / FILE_NAME}. You can close this window.")
+
+    def _reviewed(self, row):
+        selection = self.selections.of(self.folders[row])
+        return selection is not None and selection.reviewed
 
     def step(self, direction):
         row = self.folder_list.currentRow() + direction
@@ -642,6 +656,8 @@ class RoiSelectionWindow(QMainWindow):
             self.selections.export_table(path)
         except OSError as error:
             QMessageBox.warning(self, "Could not export", f"{error}\n\nIf the file is open in Excel, close it and try again.")
+            return
+        self.status.setText(f"Table saved: {path}")
 
     def closeEvent(self, event):
         self.closed.emit()

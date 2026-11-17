@@ -1,5 +1,101 @@
 # Changelog
 
+## 3.0.0a5 — 2026-11-15: audit
+
+An audit of the whole program for biologists' use, documentation, code organisation and speed.
+
+### Fixed
+
+- Changing ROI Selection's settings dropped the flags of folders whose ROI and electrode were automatic; folders
+  with flags are now kept (`Selections.change_settings`).
+- `pyproject.toml` did not list `ema.spontaneous_analysis`, so an installed EMA could not start; packages are now
+  found by setuptools.
+- A damaged or foreign file in the user's `protocols` or `detectors` folder (not UTF-8, not an object, missing a
+  name) stopped the configurators and analyses from opening. Every loader now raises only `OSError` or
+  `ValueError`, and the libraries leave such files out.
+- An unexpected error while measuring one recording (or a worker process that died) stopped the whole run, and
+  the folders measured until then were not saved. It is now noted for that recording on the Notes sheet
+  ("Unexpected error (please report it): …"), and a run that stops still saves what it measured, with the details
+  of the error in the message.
+- An error in a background thread opened the error dialog from that thread, which can crash Qt; it is now only
+  written to the console, and the example search of the Spontaneous Event Configurator catches every error.
+- A spatial measure computed by a step that did not run was written as an empty column without an error; each step
+  now declares its keys (`FOOTPRINT_KEYS`, … in `spatial.py`) and a test checks that every measure belongs to one.
+- The Spontaneous Event Configurator saved detectors with problems, had no error handling on Save and Export, asked
+  only Discard on unsaved changes, imported without asking about unsaved changes, and could delete the file it
+  failed to open. Both configurators now share one library bar (`ema/widgets.py`, `LibraryBar`).
+- The plateau fixed in a recovery fit was always 100, also for a ratio (whose full recovery is 1).
+- The *Time (ms)* axis at the top of the configurator's trace plot disappeared after the first trace.
+- The spontaneous analysis without an ROI file found the electrode and ROI centre of a folder again for every
+  recording; it is now found once per folder.
+- Leaving a path field of an analysis window without changing it read the path again; for the output folder this
+  reloaded the kept analysis and undid label and group changes not yet written. A path is now read only when it
+  changes.
+
+### Changed for users
+
+- **Start window:** the packages are grouped under *Evoked responses* and *Spontaneous events*, numbered in the
+  order they are used; descriptions wrap instead of being cut off.
+- **Plainer words:** the detection score `z` is now *strength* (× noise), in the windows and as the Excel column
+  `strength`; *release centre* is now *ROI centre* everywhere (`distance to the ROI centre`, `share near the ROI
+  centre`); the built-in detector is called *Standard detector*; the detector's *Template* section is *Event shape*
+  and its *Width (σ)* is *Pooling width*; the *Near misses* tab is *Possible typos*; *Time between frames* and
+  *Skip recordings with these words* everywhere. Detector files with the earlier measure names still open.
+- **Advanced settings:** the detector's expert settings (tissue, bleaching correction, echoes, fit limits, …) are
+  in one closed *Advanced* section.
+- **Analyses:** the rows are numbered; a question before measuring folders whose ROI was not reviewed in ROI
+  Selection, and those folders are marked in the Folders tab; a note when labels or groups changed since the tables
+  were written, and a question on closing; a note when the output folder's own labels, filter and groups are taken
+  over; "Measure everything again?" names the old and the new protocol or detector. Texts of the spontaneous
+  analysis speak of the recordings folder, not the ROI file.
+- **Kept results** are measured again only when the protocol or detector changed or EMA computes them differently
+  (each analysis's `RESULTS_VERSION`), no longer after every EMA update. Results kept by 3.0.0a4 are measured again
+  once.
+- **ROI Selection:** *Accept and next* goes to the next folder that is not reviewed yet, and says when all are; a
+  legend of the folder marks; *Export table* says where it saved.
+- **Labels editor:** Remove, Restore the defaults and Import ask first; a failed export is reported.
+- **New protocol form:** shorter texts that fit, the file names the patterns give, and a message instead of a silent
+  *Create* when the name is missing.
+- **Evoked configurator:** units on the condition range and the fixed plateau; the trace axis is named; the plot
+  toolbar keeps only Home, Back, Forward, Pan, Zoom and Save.
+- The unexpected-error dialog says what to do, with the details folded away.
+
+### Faster
+
+- The spontaneous detector is about 25 % faster (9.1 s → 6.8 s per recording on one core) and needs a third less
+  memory (peak 808 → 540 MB per recording), with results identical to the last digit on 19 recordings of the study: medians taken pixel by
+  pixel in memory order (`median_of_rows`), the bleaching correction in chunks, no copy of the movie for the dips,
+  and regions labelled by visiting only the pixels above threshold (`connected`, numbered as `ndimage.label`).
+  Numba was measured and left out: on top of these changes it would add about 10 % for a new dependency and several
+  seconds of compiling in every worker.
+- The evoked per-recording workbook no longer re-sorts every slice's recordings for every cell.
+
+### Code
+
+- Shared modules instead of copies: `ema/library.py` (protocol and detector libraries), `ema/kept_results.py` (what
+  an analysis keeps and plans), `ema/definitions.py` (one `setting()`, a `Settings` base with checked `from_dict`,
+  and `Measure`), `ema/widgets.py` (inputs, settings forms, check lists, the library bar), `ema/paths.py`.
+- Matching names on both sides: `evoked/catalogue.py` (was `metrics.py`) and `spontaneous/catalogue.py` (split out of
+  `measures.py`) list the measures; `measure_details.py` describes them; `presets.py` holds the built-in protocols
+  and detectors and their library, shipped in `built_in/`. `protocol.Measure` is now `Column`;
+  `evoked_analysis.window.AnalysisWindow` is `EvokedAnalysisWindow`.
+- One list of a protocol's names (`Protocol.names()`); fit results built from the fits' own names; the camera's
+  frame time and pixel size in one place (`recordings.FRAME_MS`, `PIXEL_UM`); skip words and the folder filter in
+  `recordings.py`.
+- Tests for the rules above (`tests/test_structure.py`): the measuring never imports the GUI, every spatial measure
+  belongs to a step, every setting can be shown and saved, damaged library files are left out, one failing
+  recording does not stop a run. Message boxes a test does not answer now fail the test.
+- Worker processes no longer load Qt: `EMA.pyw` and `ema/__main__.py` import the program only in the main process.
+
+### Documentation
+
+- User pages rewritten in plain words without design history; a glossary; *What EMA expects from your
+  recordings*; a workflow section; unique page titles; anchors for every measure of the references.
+- New developer page *Extending EMA*: how to add a measure, a setting, a protocol feature, a built-in protocol or
+  detector, or a package, and the rules of the files.
+- A shared copy comes with the documentation already built; the README and the start window say how to build it
+  when it is missing.
+
 ## 3.0.0a4 — 2026-11-14
 
 ### New: Evoked Analysis

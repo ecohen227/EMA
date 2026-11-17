@@ -1,5 +1,5 @@
-Step by step
-============
+ROI Selection, step by step
+===========================
 
 1. Setup
 --------
@@ -14,7 +14,8 @@ three things, from top to bottom, and shows an example on the right.
 
 Recordings folder
    The folder that holds your recordings. It can be one slice, one animal or
-   a whole study: every folder inside it that holds TIFF movies is listed.
+   a whole study: every folder inside it that holds TIFF movies is listed
+   (see :doc:`../recordings`).
 
 Only folders with / Skip folders with
    To work on part of the recordings, type words that the path of a folder
@@ -33,17 +34,15 @@ Only folders with / Skip folders with
    folder.
 
 Settings
-   The variables of the automatic detection, in four sections: *ROI*,
-   *Timing*, *Electrode* and *Display*. The sections are closed, because the
-   defaults suit the standard recordings (128 × 128 pixels, stimulation near
-   frame 103) and most of the time nothing here needs changing. Click a
-   heading to open its section. Hover over a setting to read what it does;
-   :doc:`settings` explains each one with a picture.
+   The settings of the automatic detection, in four sections: *ROI*,
+   *Timing*, *Electrode* and *Display*. The sections start closed; the
+   defaults are set for 128 × 128-pixel recordings with the stimulus near
+   frame 103. Click a heading to open its section. Hover over a setting to
+   read what it does; :doc:`settings` explains each one with a picture.
 
    A closed section says in its heading when something in it is not at its
-   default, for example *Electrode (1 changed from the default)*, so a
-   changed setting is never out of sight. *Restore defaults* puts every
-   setting back.
+   default, for example *Electrode (1 changed from the default)*.
+   *Restore the defaults* puts every setting back.
 
 Output folder
    Where ``roi_selections.json`` is saved. It must be outside the recordings
@@ -220,9 +219,9 @@ Settings…
 
    After a change to a **setting**, every folder has to be reviewed again:
    all ✓ marks are removed, and EMA asks before it does that. What you set
-   by hand is kept, a moved ROI or a redrawn electrode; only the radius
-   follows the new setting. Everything that was found automatically is found
-   again with the new settings.
+   by hand is kept: a moved ROI, a redrawn electrode and the flags; only the
+   radius follows the new setting. Everything that was found automatically
+   is found again with the new settings.
 
    A change to the **folder filter** does not undo any review. Folders that
    no longer pass the filter are removed from the ROI file, and EMA asks

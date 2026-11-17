@@ -3,14 +3,14 @@ Labels from folder names
 
 Every row of the tables carries **labels** read from the names of its
 folders: the line, genotype, treatment, duration, sex, animal and slice, for
-example. They are set on the **Labels** tab and checked on the **Folders
-and their labels** and **Near misses** tabs.
+example. They are set on the **Labels** tab and checked on the **Folders**
+and **Possible typos** tabs. Both analyses use the same labels.
 
 .. figure:: ../screenshots/analysis_labels.png
    :width: 100%
 
    The Labels tab with the labels EMA starts with. *Contrl* was just added
-   to the spellings of CTRL from the Near misses tab.
+   to the spellings of CTRL from the Possible typos tab.
 
 Labels, values and spellings
 ----------------------------
@@ -62,12 +62,13 @@ out**: for ``Females/LKI HET F5819/IFNy 4HR/Slice 2/input output``, first
 ``Females``. The first folder that holds a label gives its value. In this
 example the labels are LKI, HET, IFN, 4H, F, 5819 and 2.
 
-Only the folders inside the recordings folder of the ROI file are read,
-unless **Also read the folders above the recordings folder** is ticked. Tick it when a label is only in the name of the recordings folder
-itself, for example when the ROI file was made for one animal's folder.
+Only the folders inside the recordings folder are read, unless **Also read
+the folders above the recordings folder** is ticked. Tick it when a label is
+only in the name of the recordings folder itself, for example when the
+recordings folder is one animal's folder.
 
-The table on the **Folders** tab shows the value of every
-label for every folder:
+The table on the **Folders** tab shows the value of every label for every
+folder:
 
 * **Red**: the label was not found. Its cell stays empty in the tables, and
   in the Prism sheets the slice goes into a group such as
@@ -80,34 +81,37 @@ label for every folder:
 The orange ones, and the red ones of the labels the slices are grouped by,
 are also listed on the *Notes* sheet of the tables.
 
-Near misses
------------
+Possible typos
+--------------
 
-A **near miss** is a word in a folder name that is not a spelling but looks
-like one. The **Near misses** tab lists each one, with the spelling it looks
-like and the folders it is in.
+A **possible typo** is a word in a folder name that is not a spelling but
+looks like one. The **Possible typos** tab lists each one, with the
+spelling it looks like and the folders it is in.
 
 .. figure:: ../screenshots/analysis_near_misses.png
    :width: 100%
 
-   One near miss: *Contrl*, which looks like CNTRL, a spelling of CTRL.
+   One possible typo: *Contrl*, which looks like CNTRL, a spelling of CTRL.
 
-A word of three letters or more is a near miss of a spelling's word when
+Only words of three letters or more count. Such a word looks like a word
+of a spelling when
 
-* one or two letters are off: a letter missing, added, changed, or two
-  letters swapped (``HTE`` for HET, ``Slcie`` for Slice; one letter for
-  words of up to five letters, two for longer words);
+* one or two letters are off: a letter missing, added or changed, or two
+  letters swapped (``HTE`` for HET, ``Slcie`` for Slice). One letter may be
+  off when the spelling's word has up to five letters, two when it is
+  longer;
 * one starts with the other (``IFNy`` and IFN, ``Controls`` and control);
 * one is a short form of the other: it starts with the same letter, has the
   other letters in the same order, and is at least half as long (``CNTRL``
   and control).
 
-Choose what each near miss means under **It means** and press **Apply**:
+Choose what each possible typo means under **It means** and press
+**Apply**:
 
 * a value: the word (in a number label, the spelling with the word in it,
   such as ``Slcie #``) is added to the spellings of that value, and the
   folders that hold it get that value;
-* **Not a label**: the word is never shown as a near miss again.
+* **Not a label**: the word is never shown as a possible typo again.
 
 The labels EMA starts with
 --------------------------
@@ -152,7 +156,8 @@ On the **Labels** tab:
   HET).
 * **More** holds *Restore the defaults* (the labels above), *Export…* (save
   the labels in a file, to share them) and *Import…* (read such a file, or
-  the labels of another analysis from its ``evoked_analysis.json``).
+  the labels of another analysis from its ``evoked_analysis.json`` or
+  ``spontaneous_analysis.json``).
 
 The labels are kept with the analysis in its output folder, and EMA starts
 the next new analysis with the labels last used.

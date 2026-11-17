@@ -1,265 +1,44 @@
 """The dialog that starts ROI Selection: recordings folder, settings, output folder."""
 
-from dataclasses import fields
-from pathlib import Path
-
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
     QApplication,
-    QCheckBox,
-    QComboBox,
     QDialog,
     QDialogButtonBox,
-    QDoubleSpinBox,
-    QFileDialog,
-    QFormLayout,
-    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMessageBox,
     QPushButton,
-    QSpinBox,
-    QToolButton,
     QVBoxLayout,
-    QWidget,
 )
 
 from ..recordings import find_recording_folders
 from ..user_settings import remember, remembered
+from ..widgets import FolderFilter, FolderInput, SettingsForm, hint, is_inside
 from .preview import SettingsPreview
-from .selections import FILE_NAME, Selections, folder_matches
+from ..recordings import folder_matches
+from .selections import FILE_NAME, Selections
 from .settings import RoiSettings
 
-MAX_FRAME = 1_000_000
-
-
-class Section(QWidget):
-    """A group of settings under a heading. Clicking the heading shows or hides the settings."""
-
-    def __init__(self, title):
-        super().__init__()
-        self.title = title
-        self.heading = QToolButton()
-        self.heading.setText(title)
-        self.heading.setCheckable(True)
-        self.heading.setAutoRaise(True)
-        self.heading.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        self.heading.setToolTip("Click to show or hide these settings.")
-        self.heading.toggled.connect(self.show_settings)
-        self.content = QFrame()
-        self.content.setFrameShape(QFrame.StyledPanel)
-        self.form = QFormLayout(self.content)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
-        layout.addWidget(self.heading)
-        layout.addWidget(self.content)
-        self.show_settings(False)
-
-    def show_settings(self, shown):
-        self.content.setVisible(shown)
-        self.heading.setArrowType(Qt.DownArrow if shown else Qt.RightArrow)
-
-    def show_note(self, note):
-        """Put a short remark after the title, or remove it with an empty text."""
-        self.heading.setText(f"{self.title}   ({note})" if note else self.title)
-
-
-class SettingsForm(QWidget):
-    """One input per setting, in sections that open on a click. Built from the list in settings.py.
-
-    The sections start closed, because the defaults suit most recordings. A
-    closed section says in its heading when one of its settings is not at its
-    default, so that a change is never out of sight.
-    """
-
-    changed = pyqtSignal()  # any setting was edited
+class RoiSettingsForm(SettingsForm):
+    """The ROI settings, in two columns. The electrode settings are greyed out while the electrode is not looked for."""
 
     def __init__(self, settings):
-        super().__init__()
-        self.inputs = {}
-        self.labels = {}
-        self.sections = {}
-        columns = QHBoxLayout(self)
-        columns.setContentsMargins(0, 0, 0, 0)
-        left, right = QVBoxLayout(), QVBoxLayout()
-        columns.addLayout(left, 1)
-        columns.addLayout(right, 1)
-
-        for f in fields(RoiSettings):
-            details = f.metadata
-            if details["group"] not in self.sections:
-                section = self.sections[details["group"]] = Section(details["group"])
-                (right if details["group"] in ("Electrode", "Display") else left).addWidget(section)
-            widget = self._make_input(details)
-            widget.setToolTip(details["help"])
-            label = QLabel(details["label"] + ":")
-            label.setToolTip(details["help"])
-            self.sections[details["group"]].form.addRow(label, widget)
-            self.inputs[f.name] = widget
-            self.labels[f.name] = label
-        left.addStretch()
-        right.addStretch()
+        super().__init__(RoiSettings, right=("Electrode", "Display"))
         self.inputs["find_electrode"].toggled.connect(self.grey_out_electrode_settings)
-        self.changed.connect(self.show_changes)
         self.show_settings(settings)
 
-    def show_changes(self):
-        """Say in each heading how many of its settings are not at their default."""
-        settings, defaults = self.settings(), RoiSettings()
-        for group, section in self.sections.items():
-            names = [f.name for f in fields(RoiSettings) if f.metadata["group"] == group]
-            changed = sum(getattr(settings, name) != getattr(defaults, name) for name in names)
-            section.show_note(f"{changed} changed from the default" if changed else "")
+    def show_settings(self, settings):
+        super().show_settings(settings)
+        self.grey_out_electrode_settings()
 
     def grey_out_electrode_settings(self):
-        """The other electrode settings mean nothing while the electrode is not looked for."""
         wanted = self.inputs["find_electrode"].isChecked()
         for name in self.inputs:
             if name.startswith("electrode_"):
                 self.inputs[name].setEnabled(wanted)
                 self.labels[name].setEnabled(wanted)
-
-    def _make_input(self, details):
-        """The input widget for one setting. Every widget reports its edits through `changed`."""
-        kind = details["kind"]
-        if kind == "bool":
-            box = QCheckBox()
-            box.toggled.connect(self.changed)
-        elif kind == "choice":
-            box = QComboBox()
-            box.addItems(details["choices"])
-            box.currentTextChanged.connect(self.changed)
-        elif kind == "names":
-            box = QLineEdit()
-            box.textChanged.connect(self.changed)
-        elif kind == "frames":
-            box = FrameRange()
-            box.changed.connect(self.changed)
-        else:
-            box = QSpinBox() if kind == "int" else QDoubleSpinBox()
-            box.setRange(details["minimum"], details["maximum"])
-            if kind == "float":
-                box.setSingleStep(details["step"])
-            box.setSuffix(" " + details["unit"])
-            box.valueChanged.connect(self.changed)
-        return box
-
-    def show_settings(self, settings):
-        for f in fields(RoiSettings):
-            widget, value, kind = self.inputs[f.name], getattr(settings, f.name), f.metadata["kind"]
-            if kind == "bool":
-                widget.setChecked(value)
-            elif kind == "choice":
-                widget.setCurrentText(value)
-            elif kind == "names":
-                widget.setText(", ".join(value))
-            else:
-                widget.setValue(value)
-        self.grey_out_electrode_settings()
-
-    def settings(self):
-        values = {}
-        for f in fields(RoiSettings):
-            widget, kind = self.inputs[f.name], f.metadata["kind"]
-            if kind == "bool":
-                values[f.name] = widget.isChecked()
-            elif kind == "choice":
-                values[f.name] = widget.currentText()
-            elif kind == "names":
-                names = [name.strip() for name in widget.text().split(",")]
-                values[f.name] = [name.removesuffix(".tif") for name in names if name]
-            else:
-                values[f.name] = widget.value()
-        return RoiSettings(**values)
-
-
-class FrameRange(QWidget):
-    """Two numbers: the first frame of a window and the frame it ends before."""
-
-    changed = pyqtSignal()
-
-    def __init__(self):
-        super().__init__()
-        self.first, self.last = QSpinBox(), QSpinBox()
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        for text, box in (("from", self.first), ("up to", self.last)):
-            box.setRange(0, MAX_FRAME)
-            box.valueChanged.connect(self.changed)
-            layout.addWidget(QLabel(text))
-            layout.addWidget(box, 1)
-
-    def setValue(self, frames):
-        self.first.setValue(frames[0])
-        self.last.setValue(frames[1])
-
-    def value(self):
-        return [self.first.value(), self.last.value()]
-
-
-class FolderInput(QWidget):
-    """A folder path with a Browse button."""
-
-    changed = pyqtSignal()  # another folder was typed or picked
-
-    def __init__(self, title, folder=""):
-        super().__init__()
-        self.title = title
-        self.path = QLineEdit(folder)
-        self.path.editingFinished.connect(self.changed)
-        browse = QPushButton("Browse…")
-        browse.clicked.connect(self.browse)
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.path, 1)
-        layout.addWidget(browse)
-
-    def browse(self):
-        folder = QFileDialog.getExistingDirectory(self, self.title, self.path.text())
-        if folder:
-            self.path.setText(folder)
-            self.changed.emit()
-
-    def folder(self):
-        text = self.path.text().strip()
-        return Path(text) if text else None
-
-
-class FolderFilter(QWidget):
-    """Two lists of words that choose which recording folders are used."""
-
-    changed = pyqtSignal()
-
-    def __init__(self):
-        super().__init__()
-        self.only_with, self.skip_with = QLineEdit(), QLineEdit()
-        self.only_with.setPlaceholderText("all folders")
-        self.only_with.setToolTip(
-            "Words separated by commas, for example: 11p\n"
-            "Only folders with at least one of these words in their path are used. Leave empty to use all."
-        )
-        self.skip_with.setPlaceholderText("none")
-        self.skip_with.setToolTip(
-            "Words separated by commas, for example: 4ap, wash\n"
-            "Folders with one of these words in their path are left out."
-        )
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        for text, box in (("Only folders with:", self.only_with), ("Skip folders with:", self.skip_with)):
-            box.textChanged.connect(self.changed)
-            layout.addWidget(QLabel(text))
-            layout.addWidget(box, 1)
-
-    def show_words(self, only_with, skip_with):
-        self.only_with.setText(", ".join(only_with))
-        self.skip_with.setText(", ".join(skip_with))
-
-    def words(self):
-        """The two lists of words: (only folders with, skip folders with)."""
-        return tuple([word.strip() for word in box.text().split(",") if word.strip()] for box in (self.only_with, self.skip_with))
 
 
 class SetupDialog(QDialog):
@@ -295,7 +74,7 @@ class SetupDialog(QDialog):
         self.filter.changed.connect(self.show_matching_folders)
         self.match_count = QLabel()
         self.all_folders = []  # every recording folder under the recordings folder
-        self.form = SettingsForm(selections.settings if running else RoiSettings())
+        self.form = RoiSettingsForm(selections.settings if running else RoiSettings())
         self.note = QLabel()
         self.note.setWordWrap(True)
 
@@ -307,9 +86,9 @@ class SetupDialog(QDialog):
         self.preview_timer.setSingleShot(True)
         self.preview_timer.setInterval(300)
         self.preview_timer.timeout.connect(self.show_example)
-        self.form.changed.connect(self.preview_timer.start)
+        self.form.changed.connect(lambda _: self.preview_timer.start())
 
-        defaults = QPushButton("Restore defaults")
+        defaults = QPushButton("Restore the defaults")
         defaults.clicked.connect(lambda: self.form.show_settings(RoiSettings()))
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.button(QDialogButtonBox.Ok).setText("Apply" if running else "Start")
@@ -371,9 +150,7 @@ class SetupDialog(QDialog):
     def _step(self, title, explanation, *widgets):
         box = QGroupBox(title)
         layout = QVBoxLayout(box)
-        hint = QLabel(explanation)
-        hint.setStyleSheet("color: gray")
-        layout.addWidget(hint)
+        layout.addWidget(hint(explanation))
         for widget in widgets:
             layout.addWidget(widget)
         return box
@@ -390,7 +167,7 @@ class SetupDialog(QDialog):
             return
         try:
             saved = Selections.load(file)
-        except (OSError, ValueError, KeyError) as error:
+        except (OSError, ValueError) as error:
             self.note.setText(f"⚠ The {FILE_NAME} in the output folder cannot be read: {error}")
             return
         self.form.show_settings(saved.settings)
@@ -409,7 +186,7 @@ class SetupDialog(QDialog):
             problems.append("Choose an existing recordings folder.")
         if output is None:
             problems.append("Choose an output folder.")
-        elif recordings is not None and _is_inside(output, recordings):
+        elif recordings is not None and is_inside(output, recordings):
             problems.append("The output folder must be outside the recordings folder, so the recordings stay untouched.")
         if problems:
             QMessageBox.warning(self, "Please check", "\n\n".join(problems))
@@ -450,7 +227,7 @@ class SetupDialog(QDialog):
             return Selections(recordings)
         try:
             saved = Selections.load(file)
-        except (OSError, ValueError, KeyError) as error:
+        except (OSError, ValueError) as error:
             QMessageBox.warning(self, "Cannot read the saved selections", f"{file}\n\n{error}\n\nChoose another output folder.")
             return None
         if saved.recordings_folder.resolve() != recordings.resolve():
@@ -464,8 +241,3 @@ class SetupDialog(QDialog):
                 return None
             saved.recordings_folder = recordings
         return saved
-
-
-def _is_inside(folder, parent):
-    folder, parent = folder.resolve(), parent.resolve()
-    return folder == parent or parent in folder.parents

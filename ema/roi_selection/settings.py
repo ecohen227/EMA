@@ -4,21 +4,16 @@ Each setting carries its own label, unit and help text. The settings dialog
 and the documentation are both built from this one list.
 """
 
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import dataclass
+
+from ..definitions import Settings, setting
+from ..recordings import PIXEL_UM
 
 EDGES = ["left", "right", "top", "bottom", "any"]
 
 
-def setting(default, group, label, help, kind, unit="", **options):
-    """One setting. `kind` picks its input widget: int, float, bool, names, frames or choice."""
-    details = dict(group=group, label=label, help=help, kind=kind, unit=unit, **options)
-    if isinstance(default, list):
-        return field(default_factory=lambda: list(default), metadata=details)
-    return field(default=default, metadata=details)
-
-
 @dataclass
-class RoiSettings:
+class RoiSettings(Settings):
     # --- ROI ---
     roi_radius_px: int = setting(
         20, "ROI", "ROI radius", "Radius of the circular ROI.", "int", "pixels", minimum=1, maximum=500
@@ -34,7 +29,7 @@ class RoiSettings:
     skip_words: list = setting(
         ["red"],
         "ROI",
-        "Never use files named",
+        "Skip recordings with these words",
         "Recordings with one of these words in their name (for example 'hi1 red.tif') are left out "
         "of the automatic detection. They can still be viewed and flagged.",
         "names",
@@ -183,7 +178,7 @@ class RoiSettings:
 
     # --- Display ---
     pixel_size_um: float = setting(
-        16.0,
+        PIXEL_UM,
         "Display",
         "Pixel size",
         "Only used to show sizes in micrometres. 16 µm is the 4× objective.",
@@ -194,22 +189,13 @@ class RoiSettings:
         step=1.0,
     )
 
-    def to_dict(self):
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, values):
-        """Settings from a saved file. Names this version does not know are ignored."""
-        known = {f.name for f in fields(cls)}
-        return cls(**{name: value for name, value in values.items() if name in known})
-
     def problems(self):
         """Reasons these settings cannot be used, as sentences. Empty when they are fine."""
         found = []
         for name in ("baseline_frames", "search_frames"):
             start, stop = getattr(self, name)
             if not 0 <= start < stop:
-                label = type(self).__dataclass_fields__[name].metadata["label"]
+                label = self.labels()[name]
                 found.append(f"{label}: the first frame must be smaller than the last.")
         if self.electrode_surround_px % 2 == 0:
             found.append("Size of the surroundings must be an odd number.")

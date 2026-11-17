@@ -1,17 +1,15 @@
-Settings
-========
+ROI Selection settings
+======================
 
 The settings are chosen in the setup dialog and can be changed later with
-*Settings…*. They are saved in the ROI file together with the selections, so
-it is always known which settings a selection was made with. For the same
-reason, changing a setting later means every folder has to be reviewed
-again.
+*Settings…*. They are saved in the ROI file together with the selections.
+After a change, every folder has to be reviewed again.
 
 In the dialog the settings sit in four sections, *ROI*, *Timing*,
 *Electrode* and *Display*, which open when their heading is clicked. They
-start closed: the defaults are meant to stay as they are unless your
-recordings need something else. The heading of a closed section says when
-one of its settings is not at its default.
+start closed; the defaults are set for 128 × 128-pixel recordings with the
+stimulus near frame 103. The heading of a closed section says when one of
+its settings is not at its default.
 
 Trying a setting
 ----------------
@@ -37,7 +35,7 @@ timing windows, and one line with the numbers.
 All figures on this page are drawn from the sample slice by the program's
 own functions. Distances are in pixels; with the 4× objective one pixel is
 16 µm. Frame numbers count from the second frame of the TIFF (see
-:doc:`../getting_started`).
+:doc:`../recordings`).
 
 ROI
 ---
@@ -69,7 +67,7 @@ ROI
 by commas. They are averaged into the mean recording on which the ROI and
 the electrode are found. If a folder has only some of them, those are used.
 If it has none, all its stimulated recordings are used, except files with
-one of the words under **Never use files named** in their name.
+one of the words under **Skip recordings with these words** in their name.
 
 Timing
 ------
@@ -84,8 +82,8 @@ Timing
    contain the peak of the first response; it may be generous, because only
    its highest point is used.
 
-A window is given as *from* a frame *up to* a frame; the second frame itself
-is not included. If a recording is shorter than the start of a window, the
+A :term:`window` is given as *from* a frame *up to* a frame; the second
+frame itself is not included. If a recording is shorter than the start of a window, the
 folder cannot be detected and the window says so.
 
 Electrode

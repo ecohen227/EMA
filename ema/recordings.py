@@ -19,6 +19,10 @@ TIFF_SUFFIXES = (".tif", ".tiff")
 MIN_MOVIE_BYTES = 1_000_000  # smaller TIFFs are single reference images, not movies
 NO_STIM_NAME = re.compile(r"^no\s*\d", re.IGNORECASE)
 
+# The camera the defaults are for: time between frames (ms) and the width of a pixel in the slice (µm).
+FRAME_MS = 4.849
+PIXEL_UM = 16.0
+
 
 def list_recordings(folder):
     """The TIFF movies in a folder: numbered names first (50uA, 100uA, ...), then the rest by name."""
@@ -62,6 +66,24 @@ def load_stack(path):
 def is_no_stim(path):
     """True for unstimulated trials such as 'no3.tif' or 'no1 red.tif'."""
     return bool(NO_STIM_NAME.match(Path(path).name))
+
+
+def has_skip_word(path, words):
+    """True if a recording's name holds one of these words, such as 'red' in 'no1 red.tif' or 'hi2_red.tif'."""
+    skip = {word.lower() for word in words}
+    return bool(skip & set(re.split(r"[\s_\-]+", Path(path).stem.lower())))
+
+
+def folder_matches(name, only_with, skip_with):
+    """True if a folder name passes a folder filter.
+
+    The name must contain at least one of the words in `only_with` (if there
+    are any) and none of the words in `skip_with`. Upper and lower case count
+    as the same.
+    """
+    name = name.lower()
+    wanted = not only_with or any(word.lower() in name for word in only_with)
+    return wanted and not any(word.lower() in name for word in skip_with)
 
 
 def acquisition_time(path):

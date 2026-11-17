@@ -20,7 +20,7 @@ from matplotlib.patches import Circle
 
 from ema.evoked import measure
 from ema.evoked.kinetics import crossing, kinetics, response_trace, smoothed
-from ema.evoked.metrics import KINETIC_KEYS, SPATIAL_KEYS
+from ema.evoked.catalogue import KINETIC_KEYS, SPATIAL_KEYS
 from ema.evoked.presets import paired_pulse, pulse_train
 from ema.evoked.protocol import Window
 from ema.evoked.spatial import half_time, lorentzian, measure_spatial

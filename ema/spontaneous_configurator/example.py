@@ -1,4 +1,4 @@
-"""The example folder of the spontaneous-event configurator: its unstimulated recordings, release centre and electrode."""
+"""The example folder of the spontaneous-event configurator: its unstimulated recordings, ROI centre and electrode."""
 
 from functools import lru_cache
 from pathlib import Path
@@ -10,7 +10,7 @@ from ..roi_selection import RoiSettings, Selections, detect_folder
 
 
 class ExampleFolder:
-    """A folder of recordings with the release centre (ROI centre) and the electrode mask the detector needs.
+    """A folder of recordings with the ROI centre and the electrode mask the detector needs.
 
     Both come from an ROI file made by ROI Selection when it covers the
     folder, otherwise they are found automatically from the folder's
@@ -29,11 +29,11 @@ class ExampleFolder:
         if roi_file:
             try:
                 selection = Selections.load(roi_file).of(self.folder)
-            except (OSError, ValueError, KeyError):
+            except (OSError, ValueError):
                 selection = None
             if selection is not None:
                 self.center, self.electrode = tuple(selection.roi_center), selection.electrode_mask
-                self.source = f"Release centre and electrode from {Path(roi_file).name}."
+                self.source = f"ROI centre and electrode from {Path(roi_file).name}."
                 return
         try:
             detection = detect_folder(self.folder, RoiSettings())
@@ -43,4 +43,4 @@ class ExampleFolder:
             self.source = "No ROI file for this folder and no stimulated recording: the image centre is used, without electrode."
             return
         self.center, self.electrode = tuple(detection.center), detection.electrode
-        self.source = "Release centre and electrode found automatically (choose an ROI file to use reviewed ones)."
+        self.source = "ROI centre and electrode found automatically (choose an ROI file to use reviewed ones)."

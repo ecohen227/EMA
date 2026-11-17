@@ -1,17 +1,17 @@
 Evoked Analysis
 ===============
 
-The evoked analysis measures every recording of the folders in an ROI file
-with a protocol, and writes two Excel files laid out for Prism: one row per
-recording in the first, one row per slice in the second. Each row carries
-labels read from its folder names, such as the genotype and the
-treatment.
+The evoked analysis measures every recording of the folders in an
+:term:`ROI file` with a :term:`protocol`, and writes two Excel files laid
+out for :term:`Prism`: one row per recording in the first, one row per
+:term:`slice` in the second. Each row carries :term:`labels <label>` read
+from its folder names, such as the genotype and the treatment.
 
 It needs
 
 * the **ROI file** (``roi_selections.json``) made by :doc:`ROI Selection
   <../roi_selection/index>`: the ROI and electrode of every folder, and the
-  recordings that were flagged;
+  recordings that were :term:`flagged <flag>`;
 * a **protocol** made in the :doc:`Evoked Analysis Configurator
   <../evoked_configurator/index>`, or one of the built-in protocols;
 * an **output folder**, outside the recordings.
@@ -40,8 +40,8 @@ Step by step
    says what a run will do (see :ref:`running-again`).
 5. **Labels**: check the **Folders** tab. A red cell is a label that was not
    found in the folder names; an orange one needs a look (hover over it).
-   Then the **Near misses** tab: words that look like a spelling of a label
-   but are not one. See :doc:`labels`.
+   Then the **Possible typos** tab: words that look like a spelling of a
+   label but are not one. See :doc:`labels`.
 6. **Group by**: the labels whose values make the groups of the Prism
    sheets, such as *Genotype* and *Treatment* for WT CTRL, WT IFN, HET CTRL
    and HET IFN. **Slice sheets** sets the layout of the per-slice sheets.
@@ -63,8 +63,9 @@ What is measured in each folder
 -------------------------------
 
 Each recording folder is one **slice**. In it, the protocol chooses the
-recordings to measure: every stimulated recording (all but the ``no`` files
-and those with a skip word: ``red`` and ``test`` in the built-in 2P
+recordings to measure: every stimulated recording (all but the
+:term:`unstimulated recordings <unstimulated recording>` and those with a
+:term:`skip word <skip words>`: ``red`` and ``test`` in the built-in 2P
 protocols), or the recordings it lists.
 Then, for each recording:
 
@@ -94,9 +95,9 @@ Running again
 -------------
 
 Everything about an analysis is kept in its output folder, in
-``evoked_analysis.json``: the protocol, the labels, the groups, and the
-results of every folder. A new run with the same output folder measures
-only what it has to:
+``evoked_analysis.json`` (the :term:`kept results`): the protocol, the
+labels, the groups, and the results of every folder. A new run with the
+same output folder measures only what it has to:
 
 .. list-table::
    :header-rows: 1
@@ -118,9 +119,10 @@ only what it has to:
        folder), so they are not in the tables twice.
    * - The labels or the groups changed
      - Nothing is measured; press **Rewrite the tables**, or run.
-   * - The protocol changed (any setting), or EMA was updated
-     - Every folder is measured again with the new protocol, and both files
-       are replaced. EMA asks first.
+   * - The protocol changed (any setting), or a new version of EMA
+       computes the results differently
+     - Every folder is measured again, and both files are replaced. EMA
+       asks first.
 
 To keep the results of an old protocol, choose a new output folder for the
 new one.

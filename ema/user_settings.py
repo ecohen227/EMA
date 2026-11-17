@@ -4,9 +4,8 @@ They live in one JSON file in the user's home folder: ~/.ema/settings.json
 """
 
 import json
-from pathlib import Path
 
-FILE = Path.home() / ".ema" / "settings.json"
+from .paths import SETTINGS_FILE as FILE
 
 
 def remembered(name, default=""):

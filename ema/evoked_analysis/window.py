@@ -4,11 +4,9 @@ The window is the one both analyses share (ema/analysis_window.py); this is
 what the evoked analysis brings to it.
 """
 
-from ..analysis_window import AnalysisWindow as SharedWindow
-from ..analysis_window import Kind
-from ..evoked import library
-from ..evoked.analysis import FILE_NAME, Analysis, plan, run
-from ..evoked.protocol import Protocol
+from ..analysis_window import AnalysisWindow, Kind
+from ..evoked.analysis import Analysis, plan, run
+from ..evoked.presets import LIBRARY
 from ..evoked.workbook import PER_RECORDING, PER_SLICE, write_workbooks
 
 
@@ -24,14 +22,11 @@ def describe(protocol):
 
 EVOKED = Kind(
     title="EMA – Evoked Analysis",
-    method="protocol",
     configurator="Evoked Analysis Configurator",
     key="evoked_analysis",
     analysis=Analysis,
-    file_name=FILE_NAME,
     tables=(PER_RECORDING, PER_SLICE),
-    entries=lambda folder: [(entry.label, entry.path) for entry in library.entries(folder)],
-    load=Protocol.load,
+    library=LIBRARY,
     describe=describe,
     plan=plan,
     run=run,
@@ -39,6 +34,6 @@ EVOKED = Kind(
 )
 
 
-class AnalysisWindow(SharedWindow):
+class EvokedAnalysisWindow(AnalysisWindow):
     def __init__(self, user_folder=None):
         super().__init__(EVOKED, user_folder)

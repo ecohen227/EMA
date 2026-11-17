@@ -6,18 +6,16 @@ Per event, from the dF/F movie the detector searched:
   (the spatial filter, without the time filter): its peak, rise, decay;
 - an isotropic Gaussian fitted to the event's peak map: its width, fitted
   peak and size, and the event's centre;
-- its place: distances to the release centre (the ROI centre) and to the
-  electrode.
+- its place: distances to the ROI centre and to the electrode.
 
 Per recording and per slice: counts, rates, the controls, and how events
-are spread over the slice and over time. The definitions are listed in
-`EVENT`, `RECORDING` and `SLICE`, with their full descriptions in
-`measure_details.py`. Values that cannot be measured are NaN.
+are spread over the slice and over time. The measures are listed in
+catalogue.py, with their full descriptions in measure_details.py. Values that
+cannot be measured are NaN.
 """
 
 import math
 import warnings
-from dataclasses import dataclass
 
 import numpy as np
 from scipy import ndimage, optimize
@@ -28,80 +26,14 @@ TRACE_BEFORE, TRACE_AFTER = 60, 200  # frames of the event trace before and afte
 PEAK_SEARCH = (-10, 80)  # frames, from the onset, in which the trace's peak is looked for
 BASELINE_END = -10  # the trace's baseline is its median up to this frame from the onset
 MAP_BASELINE = (-45, -15)  # frames, from the onset, whose mean the peak map is measured from
-MAP_FRAMES = (-5, 40)  # frames, from the onset, in which the map's peak is looked for (the first 35 of them)
+MAP_FRAMES = (-5, 40)  # frames, from the onset, in which the map's peak is looked for
+MAP_PEAK_SEARCH = 35  # …within the first this many of them
+MAP_MEAN = (3, 5)  # the peak map is the mean from this many frames before the map's peak to this many after (excluded)
 NEAR_UM, FAR_UM, SHIFT_UM = 48.0, 480.0, 128.0  # the peak map's centre disc; its far field; how far the fit may move
+FAR_PIXELS = 100  # the far field's median is taken off the map when it has more pixels than this
+FIT_PIXELS = 200  # the width is fitted only with at least this many tissue pixels within the fit radius
 SIGMA_UM = (8.0, 400.0)  # the bounds of the fitted σ
 DECAY_FIT_FRAMES = 80  # frames from the peak fitted with an exponential for the decay time constant
-
-
-@dataclass
-class Measure:
-    """One measure: its key (also its name in the tables), unit, group and one-line definition."""
-
-    key: str
-    unit: str
-    group: str
-    explanation: str
-
-
-EVENT = [
-    Measure("onset", "s", "Detection", "The time of the event's onset from the start of the recording."),
-    Measure("z", "z", "Detection", "The detection score: the largest z of the event's region."),
-    Measure("fitted peak", "%", "Size", "The peak dF/F of the Gaussian fitted to the event's peak map."),
-    Measure("width", "µm", "Size", "σ of the Gaussian fitted to the event's peak map."),
-    Measure("full width at half maximum", "µm", "Size", "2.355 × width: the diameter at which the event is half its peak."),
-    Measure("half-maximum area", "mm²", "Size", "The area within which the fitted Gaussian is above half its peak."),
-    Measure("size", "%·mm²", "Size", "fitted peak × 2π × width²: the dF/F integrated over the slice, like an evoked total."),
-    Measure("fit quality", "r²", "Size", "The share of the peak map's variance the fitted Gaussian explains."),
-    Measure("local peak", "%", "Time course", "The peak of the event's pooled trace (diluted by the pooling)."),
-    Measure("time to peak", "ms", "Time course", "From the detected onset to the peak of the pooled trace."),
-    Measure("rise 10-90", "ms", "Time course", "Time from 10 % to 90 % of the peak on the pooled trace."),
-    Measure("rise speed", "%/s", "Time course", "80 % of the local peak ÷ the 10–90 % rise time."),
-    Measure("half-width", "ms", "Time course", "How long the pooled trace stays above half its peak."),
-    Measure("half-decay", "ms", "Time course", "From the peak to the first frame below half the peak."),
-    Measure("decay tau", "ms", "Time course", "τ of an exponential fitted to the pooled trace from its peak on."),
-    Measure("area", "%·s", "Time course", "The pooled trace integrated from 10 % of the peak on the rise to 10 % on the decay."),
-    Measure("x", "µm", "Position", "The event's centre from the left edge of the image."),
-    Measure("y", "µm", "Position", "The event's centre from the top edge of the image."),
-    Measure("distance to the release centre", "µm", "Position", "From the event's centre to the ROI centre."),
-    Measure("distance to the electrode", "µm", "Position", "From the event's maximum to the nearest pixel of the electrode."),
-    Measure("electrode side", "yes = 1", "Position", "1 when the event lies on the electrode's side of the release centre."),
-]
-
-RECORDING = [
-    Measure("events", "count", "Counts", "The events found in the recording."),
-    Measure("searched time", "s", "Counts", "The time in which onsets are counted."),
-    Measure("rate", "per min", "Counts", "events ÷ searched time."),
-    Measure("tissue area", "mm²", "Counts", "The area searched: the tissue, without the electrode."),
-    Measure("density", "per min·mm²", "Counts", "rate ÷ tissue area."),
-    Measure("sign-flipped", "count", "Controls", "Detections in the movie turned upside down."),
-    Measure("time-reversed", "count", "Controls", "Detections in the movie played backwards."),
-    Measure("pixel noise", "%", "Controls", "The median over the tissue of each pixel's robust SD of dF/F."),
-]
-
-SLICE = [
-    Measure("events", "count", "Counts", "The events found in all recordings of the slice."),
-    Measure("searched time", "min", "Counts", "The searched time of all recordings of the slice."),
-    Measure("rate", "per min", "Counts", "events ÷ searched time."),
-    Measure("density", "per min·mm²", "Counts", "rate ÷ the mean tissue area of the recordings."),
-    Measure("sign-flipped rate", "per min", "Controls", "Sign-flipped detections ÷ searched time."),
-    Measure("time-reversed rate", "per min", "Controls", "Time-reversed detections ÷ searched time."),
-    Measure("rate above the sign-flip floor", "per min", "Controls", "(events − sign-flipped detections) ÷ searched time."),
-    Measure("sign-flipped share", "fraction", "Controls", "Sign-flipped detections ÷ events."),
-    Measure("share near the release centre", "fraction", "Place", "The share of events within *Near the release centre within* of the ROI centre."),
-    Measure("share on the electrode side", "fraction", "Place", "The share of events on the electrode's side of the release centre."),
-    Measure("nearest-neighbour distance", "µm", "Place", "The median distance from each event to the nearest other event of the slice."),
-    Measure("clustering index", "ratio", "Place", "Nearest-neighbour distance ÷ the same for as many random points on the tissue."),
-    Measure("recurring sites", "count", "Place", "Places with two or more events, events closer than *Same site within* being one place."),
-    Measure("share at recurring sites", "fraction", "Place", "The share of events at a recurring site."),
-    Measure("share together", "fraction", "Time", "The share of events with another event of the same recording within *Together within*."),
-    Measure("release per minute", "%·mm² per min", "Time", "rate × the median size of the slice's events."),
-]
-
-STATISTICS = ("median", "mean", "min", "max")
-EVENT_KEYS = [m.key for m in EVENT]
-RECORDING_KEYS = [m.key for m in RECORDING]
-SLICE_KEYS = [m.key for m in SLICE]
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +52,7 @@ def measure_events(detection, settings, center, electrode):
             side = np.array([cols.mean() - center[0], rows.mean() - center[1]])
     found = []
     for frame, row, col, z in detection.events:
-        values = {"onset": frame * settings.frame_ms / 1000, "z": z}
+        values = {"onset": frame * settings.frame_ms / 1000, "strength": z}
         onset = int(frame) - detection.first_frame
         values.update(_time_course(detection, settings, onset, int(row), int(col)))
         fit = _fit_width(detection, settings, onset, int(row), int(col))
@@ -133,7 +65,7 @@ def measure_events(detection, settings, center, electrode):
         x, y = (values.pop("_fx"), values.pop("_fy")) if good else (float(col), float(row))
         values.pop("_fx", None), values.pop("_fy", None)
         values["x"], values["y"] = x * settings.pixel_um, y * settings.pixel_um
-        values["distance to the release centre"] = (math.hypot(x - center[0], y - center[1]) * settings.pixel_um
+        values["distance to the ROI centre"] = (math.hypot(x - center[0], y - center[1]) * settings.pixel_um
                                                     if center is not None else np.nan)
         values["distance to the electrode"] = (float(distance_to_electrode[int(row), int(col)])
                                                if distance_to_electrode is not None else np.nan)
@@ -223,10 +155,10 @@ def peak_map(detection, onset, row, col, settings):
     rows, cols = np.indices(detection.tissue.shape)
     distance = np.hypot(cols - col, rows - row)
     near = distance <= NEAR_UM / settings.pixel_um
-    at = int(np.argmax(ndimage.uniform_filter1d(window[:, near].mean(1), 5)[:35]))
-    image = window[max(at - 3, 0) : at + 5].mean(0)
+    at = int(np.argmax(ndimage.uniform_filter1d(window[:, near].mean(1), 5)[:MAP_PEAK_SEARCH]))
+    image = window[max(at - MAP_MEAN[0], 0) : at + MAP_MEAN[1]].mean(0)
     far = detection.tissue & (distance > FAR_UM / settings.pixel_um)
-    if far.sum() > 100:
+    if far.sum() > FAR_PIXELS:
         image = image - np.median(image[far])
     return image
 
@@ -239,7 +171,7 @@ def _fit_width(detection, settings, onset, row, col):
         return found
     rows, cols = np.indices(image.shape)
     inside = detection.tissue & (np.hypot(cols - col, rows - row) <= settings.pixels(settings.fit_radius_um))
-    if inside.sum() < 200:
+    if inside.sum() < FIT_PIXELS:
         return found
     xs, ys, values = cols[inside].astype(float), rows[inside].astype(float), image[inside]
     shift, low, high = (settings.pixels(v) for v in (SHIFT_UM, *SIGMA_UM))
@@ -286,13 +218,13 @@ def measure_recording(detection, settings):
     }
 
 
-def summarise_slice(recordings, events, settings, tissue, center, statistics, event_keys, seed=0):
-    """The per-slice measures, from the per-recording values and the events of all recordings of a slice.
+def summarise_slice(recordings, events, settings, tissue, seed=0):
+    """The per-slice measures of SLICE, from the per-recording values and the events of all recordings of a slice.
 
     `recordings` is a list of per-recording dicts; `events` a list of
     (recording index, event dict); `tissue` the searched pixels (for the
-    clustering index); `statistics` and `event_keys` choose the summaries
-    of the event measures, such as 'width median'.
+    clustering index). The summaries of event measures, such as
+    'width median', are made by `summarise_events`.
     """
     minutes = sum(r["searched time"] for r in recordings) / 60
     count = sum(r["events"] for r in recordings)
@@ -311,9 +243,9 @@ def summarise_slice(recordings, events, settings, tissue, center, statistics, ev
         "sign-flipped share": flipped / count if count else np.nan,
     }
     values = [e for _, e in events]
-    distances = np.array([e["distance to the release centre"] for e in values], float)
+    distances = np.array([e["distance to the ROI centre"] for e in values], float)
     distances = distances[np.isfinite(distances)]
-    found["share near the release centre"] = float(np.mean(distances < settings.near_um)) if len(distances) else np.nan
+    found["share near the ROI centre"] = float(np.mean(distances < settings.near_um)) if len(distances) else np.nan
     sides = np.array([e["electrode side"] for e in values], float)
     found["share on the electrode side"] = float(np.nanmean(sides)) if np.isfinite(sides).any() else np.nan
     points = np.array([(e["x"], e["y"]) for e in values], float).reshape(-1, 2)
@@ -326,7 +258,6 @@ def summarise_slice(recordings, events, settings, tissue, center, statistics, ev
     found["share together"] = _share_together(events, settings.together_ms) if values else np.nan
     event_size = np.array([e["size"] for e in values], float)
     found["release per minute"] = rate * np.nanmedian(event_size) if np.isfinite(event_size).any() else np.nan
-    found.update(summarise_events(values, event_keys, statistics))
     return found
 
 

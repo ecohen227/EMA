@@ -1,15 +1,15 @@
 # EMA 3
 
-Analysis of electrically stimulated brain-slice recordings (TIFF movies). EMA 3 is a set of five packages behind
-one start window:
+EMA analyses movies of brain slices recorded with a fluorescent sensor such as dLight (TIFF stacks). It measures
+**evoked responses** to electrical stimulation and finds **spontaneous events** in unstimulated recordings, and
+writes the results in Excel files laid out for GraphPad Prism.
 
-| Package | What it does | Status |
-|---|---|---|
-| **ROI Selection** | Finds the ROI and the electrode of every recording folder, lets you correct them and flag bad recordings | Ready |
-| **Evoked Analysis Configurator** | Makes the protocols the evoked analysis measures with: pulses, windows, comparisons, fits, kinetic and spatial measures, slice summaries | Ready |
-| **Evoked Analysis** | Measures the evoked responses inside the selected ROIs with a protocol, and writes the results, labelled from the folder names, in two Excel files laid out for Prism | Ready |
-| **Spontaneous Event Configurator** | Makes the detectors the spontaneous-event analysis uses: how events are found (detector v5 and its settings) and what is measured on them | Ready |
-| **Spontaneous Event Analysis** | Searches the unstimulated recordings of every folder under a recordings folder with a detector, and writes the events and slices, labelled from the folder names, in two Excel files laid out for Prism | Ready |
+EMA is five packages behind one start window:
+
+- **Evoked responses**: 1 ROI Selection, 2 Evoked Analysis Configurator, 3 Evoked Analysis
+- **Spontaneous events**: 1 Spontaneous Event Configurator, 2 Spontaneous Event Analysis
+
+Your recordings are only read, never changed.
 
 ## Install (once per computer)
 
@@ -35,74 +35,17 @@ Double-click the Desktop icon or `EMA.pyw`, or run:
 python -m ema
 ```
 
-## ROI Selection in one minute
-
-1. Choose **ROI Selection** in the start window.
-2. Choose the **recordings folder**, check the **settings**, choose an **output folder** (outside the recordings).
-   The example on the right shows what the settings find, and follows every change.
-3. For each folder in the list: look at the ROI (white circle) and the electrode mask (cyan). Drag the ROI, or
-   redraw the electrode with *Edit the electrode* (left button adds, right button removes).
-4. Look over the strip of recordings under the plots. Click one to show it; right-click one that fails your
-   criteria to flag it.
-5. Press **Accept and next**.
-
-Everything is saved as you go in `roi_selections.json` in the output folder. The recordings are only read, never
-changed.
-
-## Evoked Analysis Configurator in one minute
-
-1. Choose **Evoked Analysis Configurator** in the start window.
-2. Pick a protocol (*2P paired pulse* and *11P pulse train* are built in), or press **New…** to build one from the
-   template, and press **Example folder…** to try it on a folder of recordings.
-3. Change what you need on the tabs (recordings, pulses and windows, kinetics, spatial, comparisons and summary),
-   or drag the windows and fits on the plot. The table under the plot lists every
-   measure the analysis will produce, with its value on the example recording.
-4. **Save** it under a name of your own. Your protocols are kept in the `protocols` folder of EMA.
-
-## Evoked Analysis in one minute
-
-1. Choose **Evoked Analysis** in the start window.
-2. Choose the **ROI file** of ROI Selection (narrow it to one kind of folder, e.g. *Only folders with:
-   input output*), a **protocol** and an **output folder**.
-3. Check the labels read from the folder names (genotype, treatment, animal, slice, …) on the right, and say what
-   each near miss means (e.g. *Contrl* is CTRL). Tick the labels the slices are grouped by.
-4. Press **Run the analysis**. `Evoked per recording.xlsx` and `Evoked per slice.xlsx` appear in the output
-   folder: a full table, then one sheet per measure laid out to paste into Prism.
-
-A new run measures only new or changed folders and adds them to the files; with another protocol it measures
-everything again.
-
-## Spontaneous Event Configurator in one minute
-
-1. Choose **Spontaneous Event Configurator** in the start window.
-2. Pick a detector (*Detector v5*, the metric study's, is built in) and press **Example folder…** (and **ROI file…**)
-   to try it on a folder's unstimulated recordings (`no1.tif` …). The events found are circled on the slice, with
-   each one's peak map, trace and measures.
-3. Change the settings (every number of the detector is one) and the measures per event, recording and slice, and
-   press **Search** to see the change.
-4. **Save** it under a name of your own. Your detectors are kept in the `detectors` folder of EMA.
-
-## Spontaneous Event Analysis in one minute
-
-The same window as the Evoked Analysis, with a recordings folder and a detector: choose the recordings folder (and, if
-you have one, its ROI file for the reviewed electrodes; otherwise they are found automatically), the folders, a detector
-and an output folder, check the labels, and press **Run the analysis**. `Spontaneous per event.xlsx` (one row
-per event and per recording) and `Spontaneous per slice.xlsx` (one row per slice) appear in the output folder, each with
-one sheet per measure laid out for Prism. Recordings are searched several at a time (about 8 s each on one core).
-
 ## Documentation
 
-The full documentation, with figures of the procedure and of every setting, is in `docs/`. Build it once with
+The documentation explains every package step by step, with figures. Press *Documentation* in the start window,
+or open `docs/_build/html/index.html`. Start with *Getting started* and *What EMA expects from your recordings*.
+
+If the `docs/_build` folder is missing, build the documentation once:
 
 ```bash
 python -m pip install -r requirements-dev.txt
-```
-
-```bash
 python -m sphinx docs docs/_build/html
 ```
-
-then open `docs/_build/html/index.html`, or press *Documentation* in the start window.
 
 ## For developers
 
@@ -110,5 +53,5 @@ then open `docs/_build/html/index.html`, or press *Documentation* in the start w
 python -m pytest
 ```
 
-runs the tests (they make their own synthetic recordings). The layout of the code and how to add a setting or a
-package are described in `docs/development.rst`. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+runs the tests (they make their own synthetic recordings). The layout of the code is described in
+`docs/development.rst`. Changes are listed in [CHANGELOG.md](CHANGELOG.md).

@@ -1,5 +1,6 @@
 """The evoked analysis: measuring the folders of an ROI file, keeping the results, and the Excel files."""
 
+import os
 import shutil
 
 import numpy as np
@@ -11,7 +12,8 @@ from ema import user_settings
 from ema.evoked import analysis as analysis_module
 from ema.evoked.analysis import FILE_NAME, Analysis, plan, run
 from ema.evoked.protocol import AS_LISTED, LISTED, RATIO, Comparison, Fit, Protocol, Pulse, Recording, Window
-from ema.evoked.workbook import PER_RECORDING, PER_SLICE, TablesLocked, _sheet_names, write_workbooks
+from ema.evoked.workbook import PER_RECORDING, PER_SLICE, write_workbooks
+from ema.excel import TablesLocked, sheet_names
 from ema.evoked_configurator.example import ExampleFolder
 from ema.roi_selection import FolderSelection, RoiSettings, Selections, detect_folder
 
@@ -282,7 +284,7 @@ def test_notes_say_what_was_skipped_and_which_labels_are_missing(study, tmp_path
 
 def test_a_file_open_in_excel_is_reported(study, tmp_path, monkeypatch):
     analysis = measured(study, small_protocol(), tmp_path / "out")
-    real_replace = analysis_module.os.replace
+    real_replace = os.replace
 
     def locked(source, target):
         if str(target).endswith(PER_RECORDING):
@@ -297,7 +299,7 @@ def test_a_file_open_in_excel_is_reported(study, tmp_path, monkeypatch):
 
 
 def test_sheet_names_follow_the_rules_of_excel():
-    names = _sheet_names(["P2/P1", "a*b?c", "x" * 40, "x" * 40 + "y", "Notes"])
+    names = sheet_names(["P2/P1", "a*b?c", "x" * 40, "x" * 40 + "y", "Notes"])
     assert names["P2/P1"] == "P2÷P1" and names["a*b?c"] == "a-b-c"
     assert len(names["x" * 40]) == 31 and names["x" * 40 + "y"].endswith("(2)") and len(names["x" * 40 + "y"]) == 31
     assert names["Notes"] == "Notes (2)"
@@ -314,14 +316,14 @@ def app():
 
 
 def test_the_window_runs_an_analysis_and_writes_the_tables(app, study, tmp_path, monkeypatch):
-    from ema.evoked_analysis.window import AnalysisWindow
+    from ema.evoked_analysis.window import EvokedAnalysisWindow
 
     roi_file = tmp_path / "roi" / "roi_selections.json"
     roi_file.parent.mkdir()
     study.save(roi_file)
     protocol_file = tmp_path / "small.json"
     small_protocol().save(protocol_file)
-    window = AnalysisWindow(user_folder=tmp_path / "protocols")
+    window = EvokedAnalysisWindow(user_folder=tmp_path / "protocols")
     window.roi_input.path.setText(str(roi_file))
     window.load_roi_file()
     window.method_box.addItem("small", str(protocol_file))
@@ -332,7 +334,13 @@ def test_the_window_runs_an_analysis_and_writes_the_tables(app, study, tmp_path,
     assert window.folders_table.rowCount() == 3
     assert window.folders_table.item(0, 2).text() == "HET"
     assert window.output_info.text() == "New: every folder will be measured."
+    assert window.folders_table.item(0, 0).text().endswith("(not reviewed)")
 
+    asked = []
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: asked.append(args[2]) or QMessageBox.No)
+    window.start()
+    assert window.worker is None and "were not reviewed in ROI Selection" in asked[0]  # No: nothing is measured
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.Yes)
     window.start()
     window.worker.wait()
     app.processEvents()
@@ -350,20 +358,20 @@ def test_the_window_runs_an_analysis_and_writes_the_tables(app, study, tmp_path,
 
 
 def test_a_near_miss_is_resolved_from_the_window(app, study, tmp_path):
-    from ema.evoked_analysis.window import AnalysisWindow
+    from ema.evoked_analysis.window import EvokedAnalysisWindow
 
     root = study.recordings_folder
     (root / "LKI HET M5821/CTRL 2H").rename(root / "LKI HET M5821/Contrl 2H")
     study.folders = {name.replace("CTRL 2H", "Contrl 2H"): s for name, s in study.folders.items()}
     roi_file = tmp_path / "roi_selections.json"
     study.save(roi_file)
-    window = AnalysisWindow(user_folder=tmp_path / "protocols")
+    window = EvokedAnalysisWindow(user_folder=tmp_path / "protocols")
     window.roi_input.path.setText(str(roi_file))
     window.load_roi_file()
-    assert window.near_misses.misses[0].word == "Contrl" and window.tabs.tabText(2) == "Near misses (1)"
+    assert window.near_misses.misses[0].word == "Contrl" and window.tabs.tabText(2) == "Possible typos (1)"
     assert window.folders_table.item(0, 3).text() == ""  # Treatment not found yet
     window.near_misses.apply(window.near_misses.misses[0], ("Treatment", "CTRL"))
-    assert window.tabs.tabText(2) == "Near misses"
+    assert window.tabs.tabText(2) == "Possible typos"
     assert window.folders_table.item(0, 3).text() == "CTRL"
     assert "Contrl" in window.analysis.labels.label("Treatment").values["CTRL"]
     assert user_settings.remembered("folder_labels")["labels"][2]["values"]["CTRL"][-1] == "Contrl"
@@ -371,7 +379,7 @@ def test_a_near_miss_is_resolved_from_the_window(app, study, tmp_path):
 
 
 def test_the_window_asks_before_keeping_folders_of_another_roi_file(app, study, tmp_path, monkeypatch):
-    from ema.evoked_analysis.window import AnalysisWindow
+    from ema.evoked_analysis.window import EvokedAnalysisWindow
 
     measured(study, small_protocol(), tmp_path / "out")
     del study.folders["LKI HET M5821/CTRL 2H/Slice 1/input output"]
@@ -379,7 +387,7 @@ def test_the_window_asks_before_keeping_folders_of_another_roi_file(app, study, 
     study.save(roi_file)
     protocol_file = tmp_path / "small.json"
     small_protocol().save(protocol_file)
-    window = AnalysisWindow(user_folder=tmp_path / "protocols")
+    window = EvokedAnalysisWindow(user_folder=tmp_path / "protocols")
     window.roi_input.path.setText(str(roi_file))
     window.load_roi_file()
     window.method_box.addItem("small", str(protocol_file))
@@ -388,11 +396,12 @@ def test_the_window_asks_before_keeping_folders_of_another_roi_file(app, study, 
     window.output.path.setText(str(tmp_path / "out"))
     window.output_changed()
     asked = []
-    monkeypatch.setattr(QMessageBox, "question", lambda *args: asked.append(args[2]) or QMessageBox.No)
+    monkeypatch.setattr(QMessageBox, "question",
+                        lambda *args: asked.append(args[2]) or (QMessageBox.Yes if "not reviewed" in args[2] else QMessageBox.No))
     window.start()
     window.worker.wait()
     app.processEvents()
-    assert "not in this ROI file (or do not pass the folder filter): 1 folder, for example" in asked[0]
+    assert "not in this ROI file (or do not pass the folder filter): 1 folder, for example" in asked[-1]
     assert len(Analysis.load(tmp_path / "out" / FILE_NAME).folders) == 2
     window.close()
 
