@@ -127,11 +127,35 @@ def test_a_rerun_searches_only_what_changed(study, tmp_path, monkeypatch):
     assert the_plan.replace_all and len(the_plan.to_measure) == 2
 
 
+def test_folders_without_an_roi_file_entry_are_searched_again_when_the_automatic_detection_changes(
+        study, tmp_path, monkeypatch):
+    from ema.spontaneous import analysis as analysis_module
+
+    detector = standard_detector()
+    analysis = searched(study, tmp_path / "out", detector, roi_file=False)
+    with_entries, without = Recordings(study.recordings_folder, study), Recordings(study.recordings_folder)
+    assert not plan(analysis, detector, without).to_measure
+    monkeypatch.setattr(analysis_module, "AUTOMATIC_VERSION", analysis_module.AUTOMATIC_VERSION + 1)
+    assert len(plan(analysis, detector, without).to_measure) == 2
+    searched(study, tmp_path / "roi", detector)
+    assert not plan(Analysis.open(tmp_path / "roi"), detector, with_entries).to_measure  # ROI file entries: kept
+
+
 def test_a_stopped_run_keeps_the_finished_folders(study, tmp_path):
-    calls = []
-    analysis = searched(study, tmp_path / "out", cancelled=lambda: calls.append(1) or len(calls) > 2)
+    analysis = Analysis.open(tmp_path / "out")
+    run(analysis, standard_detector(), Recordings(study.recordings_folder, study), workers=1,
+        cancelled=lambda: bool(analysis.folders))  # stop once the first folder is done
     assert len(analysis.folders) == 1
     assert len(plan(analysis, standard_detector(), Recordings(study.recordings_folder, study)).to_measure) == 1
+
+
+def test_finding_the_electrode_and_centre_shows_progress_and_can_be_stopped(study, tmp_path):
+    said = []
+    analysis = Analysis.open(tmp_path / "out")
+    run(analysis, standard_detector(), Recordings(study.recordings_folder), workers=2,
+        progress=lambda done, total, text: said.append(text), cancelled=lambda: len(said) >= 1)
+    assert said[0].startswith("Finding the electrode and ROI centre of ")
+    assert not analysis.folders  # stopped before any folder was searched
 
 
 def test_the_analysis_file_is_read_back(study, tmp_path):
@@ -155,13 +179,13 @@ def test_the_two_excel_files(study, tmp_path):
     assert events.sheetnames[:2] == ["Events", "Recordings"] and events.sheetnames[-2:] == ["Notes", "About"]
     assert "width" in events.sheetnames and "fitted peak" in events.sheetnames
     table = rows(events["Events"])
-    assert table[0][:10] == ["Folder", "Recording", "Line", "Genotype", "Treatment", "Duration", "Sex", "Animal", "Slice", "Event"]
+    assert table[0][:10] == ["Folder", "Recording", "Line", "Genotype", "Treatment", "Treatment time", "Sex", "Animal", "Slice", "Event"]
     assert len(table) == 1 + 6 and [row[1] for row in table[1:4]] == ["no1.tif", "no1.tif", "no2.tif"]
     assert [row[3] for row in table[1:]] == ["WT"] * 3 + ["HET"] * 3
     prism = rows(events["width"])
     assert prism[2] == ["WT IFN", "HET CTRL"] and sum(v is not None for v in prism[3]) == 2 and len(prism) == 3 + 3
     recordings = rows(events["Recordings"])
-    assert recordings[0][:11] == ["Folder", "Recording", "Line", "Genotype", "Treatment", "Duration", "Sex", "Animal", "Slice",
+    assert recordings[0][:11] == ["Folder", "Recording", "Line", "Genotype", "Treatment", "Treatment time", "Sex", "Animal", "Slice",
                                   "Electrode and centre", "events"]
     assert recordings[1][9] == REVIEWED
 

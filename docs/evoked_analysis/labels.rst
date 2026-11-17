@@ -62,10 +62,20 @@ out**: for ``Females/LKI HET F5819/IFNy 4HR/Slice 2/input output``, first
 ``Females``. The first folder that holds a label gives its value. In this
 example the labels are LKI, HET, IFN, 4H, F, 5819 and 2.
 
-Only the folders inside the recordings folder are read, unless **Also read
-the folders above the recordings folder** is ticked. Tick it when a label is
-only in the name of the recordings folder itself, for example when the
-recordings folder is one animal's folder.
+EMA reads only the folders **inside** the recordings folder you chose. If
+the recordings folder is ``IFNy Recordings``, with the folder above inside
+it, EMA reads ``Females`` and the folders below it, but not
+``IFNy Recordings`` itself: a name that every recording shares tells
+nothing apart, and a word in it such as *IFNy* would be read as the
+treatment of every recording.
+
+This matters when the recordings folder you chose is deeper down. Say you
+chose one animal's folder, ``LKI HET F5819``. Its name holds the line, the
+genotype and the animal, but it is not read, so those labels stay empty. Tick
+**Also read the recordings folder's own name and the folders above it**, and
+EMA reads ``LKI HET F5819`` and every folder above it as well. When two
+folders give a label different values, the one nearer the recording still
+wins.
 
 The table on the **Folders** tab shows the value of every label for every
 folder:
@@ -131,7 +141,7 @@ These match the folder names of the lab's recordings, such as
      - WT: WT, wild type, wildtype. HET: HET.
    * - Treatment
      - CTRL: CTRL, CNTRL, control. IFN: IFN, IFNy, IFNg, IFNγ.
-   * - Duration
+   * - Treatment time
      - 2H: 2H, 2HR, 2HRS, 2 hours. 4H: 4H, 4HR, 4HRS, 4 hours.
    * - Sex
      - F: F#, female, females. M: M#, male, males.
@@ -140,7 +150,7 @@ These match the folder names of the lab's recordings, such as
    * - Slice
      - The number in Slice #.
 
-A folder named ``CTRL`` without a duration gets no duration.
+A folder named ``CTRL`` without a time gets no treatment time.
 
 Changing the labels
 -------------------

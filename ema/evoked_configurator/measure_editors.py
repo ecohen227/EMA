@@ -281,19 +281,24 @@ class ComparisonsEditor(Editor):
             box.setKeyboardTracking(False)
             box.valueChanged.connect(self._set_range)
         self.spread = check_box(False, self._set_spread, "Baseline spread: how much each baseline varies between the recordings")
-        self.box("Slice summary", row_of("Over the recordings of a slice:", *self.statistics.values()),
+        self.slice_file = check_box(True, self._set_slice_file, "Write Evoked per slice.xlsx")
+        self.box("Per-slice file", self.slice_file,
+                 explanation="One row per slice (per recording folder), with the slice summary and the fits across "
+                             "conditions below. Untick it when one row per recording is all you need.")
+        self.slice_boxes = []
+        self.slice_boxes.append(self.box("Slice summary", row_of("Over the recordings of a slice:", *self.statistics.values()),
                  row_of(self.in_range, self.low, "to", self.high), self.spread,
                  explanation="One value per slice (per recording folder), combining its recordings, e.g. the mean dF/F "
-                             "over 100 to 400 µA. Every measure of the other tabs is summarised.")
+                             "over 100 to 400 µA. Every measure of the other tabs is summarised."))
 
         self.condition_fits = Rows(["Name", "Measure", "Curve", "Plateau", ""])
         add_fit = QPushButton("Add fit across conditions")
         add_fit.clicked.connect(self.add_condition_fit)
-        self.box("Fits across conditions", self.condition_fits, row_of(add_fit),
+        self.slice_boxes.append(self.box("Fits across conditions", self.condition_fits, row_of(add_fit),
                  explanation="A curve fitted per slice to one measure against the condition of its recordings. "
                              "Recovery: plateau − (plateau − start)·exp(−x/τ), e.g. P11/P1 against the delay, with the "
                              "plateau fixed at 100 % for full recovery. Saturation: top·xⁿ ÷ (halfⁿ + xⁿ), e.g. the "
-                             "response against the current, which gives the half-max current.")
+                             "response against the current, which gives the half-max current."))
         self.content.addStretch()
 
     def fill(self):
@@ -311,7 +316,7 @@ class ComparisonsEditor(Editor):
                 remove_button(lambda _=False, c=comparison: self._remove(c), comparison.name),
             )
         self._fill_condition_fits()
-        widgets = [*self.statistics.values(), self.in_range, self.low, self.high, self.spread]
+        widgets = [*self.statistics.values(), self.in_range, self.low, self.high, self.spread, self.slice_file]
         for widget in widgets:
             widget.blockSignals(True)
         for name, box in self.statistics.items():
@@ -324,6 +329,9 @@ class ComparisonsEditor(Editor):
         self.low.setEnabled(self.in_range.isChecked())
         self.high.setEnabled(self.in_range.isChecked())
         self.spread.setChecked(p.summary_baseline_spread)
+        self.slice_file.setChecked(p.slice_file)
+        for box in self.slice_boxes:
+            box.setEnabled(p.slice_file)
         for widget in widgets:
             widget.blockSignals(False)
 
@@ -384,6 +392,12 @@ class ComparisonsEditor(Editor):
 
     def _set_spread(self, on):
         self.protocol.summary_baseline_spread = on
+        self.changed.emit(True)
+
+    def _set_slice_file(self, on):
+        self.protocol.slice_file = on
+        for box in self.slice_boxes:
+            box.setEnabled(on)
         self.changed.emit(True)
 
     def _fill_condition_fits(self):

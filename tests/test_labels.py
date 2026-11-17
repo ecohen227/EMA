@@ -33,10 +33,10 @@ def test_a_spelling_matches_whole_words_in_order(spelling, name, found):
 
 def test_the_lab_folders_get_every_label():
     values = read(default_labels(), "Females/LKI HET F5819/IFNy_4hr/Slice 2/11p at 200uA").values
-    assert values == {"Line": "LKI", "Genotype": "HET", "Treatment": "IFN", "Duration": "4H", "Sex": "F",
+    assert values == {"Line": "LKI", "Genotype": "HET", "Treatment": "IFN", "Treatment time": "4H", "Sex": "F",
                       "Animal": "5819", "Slice": "2"}
     values = read(default_labels(), "Males/AK Recordings/GKI WT M5139/Control/Slice3/input_ouput").values
-    assert values["Treatment"] == "CTRL" and values["Duration"] == "" and values["Slice"] == "3"
+    assert values["Treatment"] == "CTRL" and values["Treatment time"] == "" and values["Slice"] == "3"
 
 
 def test_the_innermost_folder_wins_and_a_disagreement_is_noted():

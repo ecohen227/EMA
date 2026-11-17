@@ -8,7 +8,7 @@ import pytest
 from openpyxl import load_workbook
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
-from ema import user_settings
+from ema import analysis_window, user_settings
 from ema.evoked import analysis as analysis_module
 from ema.evoked.analysis import FILE_NAME, Analysis, plan, run
 from ema.evoked.protocol import AS_LISTED, LISTED, RATIO, Comparison, Fit, Protocol, Pulse, Recording, Window
@@ -234,7 +234,7 @@ def test_the_per_recording_file_has_a_table_and_a_prism_sheet_per_measure(study,
     assert book.sheetnames == ["Recordings", "B1", "P1", "P1 response", "P1 half-decay", "P1 footprint width",
                                "P1÷P1", "Tau", "Notes", "About"]
     table = rows(book["Recordings"])
-    assert table[0][:13] == ["Folder", "Recording", "Unstimulated partner", "Line", "Genotype", "Treatment", "Duration",
+    assert table[0][:13] == ["Folder", "Recording", "Unstimulated partner", "Line", "Genotype", "Treatment", "Treatment time",
                              "Sex", "Animal", "Slice", "Current (µA)", "ROI reviewed", "B1 (counts)"]
     assert [row[4] for row in table[1:]] == ["WT"] * 4 + ["HET"] * 2  # WT first: the order of the values
     assert table[1][:2] == ["LKI WT F5823/IFN 4H/Slice 1/input output", "100uA.tif"]
@@ -254,7 +254,7 @@ def test_the_per_slice_file_as_column_and_as_grouped_table(study, tmp_path):
     write_workbooks(analysis)
     book = load_workbook(tmp_path / "out" / PER_SLICE)
     assert book.sheetnames[0] == "Slices" and "P1 response mean" in book.sheetnames
-    assert rows(book["Slices"])[0][:11] == ["Folder", "Line", "Genotype", "Treatment", "Duration", "Sex", "Animal",
+    assert rows(book["Slices"])[0][:11] == ["Folder", "Line", "Genotype", "Treatment", "Treatment time", "Sex", "Animal",
                                             "Slice", "Recordings measured", "ROI reviewed", "B1 mean (counts)"]
     column = rows(book["P1 response mean"])
     assert column[2] == ["WT IFN", "HET CTRL"]
@@ -272,14 +272,14 @@ def test_the_per_slice_file_as_column_and_as_grouped_table(study, tmp_path):
 def test_notes_say_what_was_skipped_and_which_labels_are_missing(study, tmp_path):
     study.folders["LKI WT F5823/IFN 4H/Slice 1/input output"].flagged_files = {"100uA.tif": "drift"}
     analysis = measured(study, small_protocol(), tmp_path / "out")
-    analysis.group_by = ["Genotype", "Duration"]
-    analysis.labels.label("Duration").values["4H"] = ["4 hours"]
+    analysis.group_by = ["Genotype", "Treatment time"]
+    analysis.labels.label("Treatment time").values["4H"] = ["4 hours"]
     write_workbooks(analysis)
     book = load_workbook(tmp_path / "out" / PER_RECORDING)
     notes = rows(book["Notes"])[1:]
     assert ["LKI WT F5823/IFN 4H/Slice 1/input output", "100uA.tif", "Not measured: Flagged in ROI Selection: drift"] in notes
-    assert ["LKI WT F5823/IFN 4H/Slice 1/input output", None, "No Duration in the folder names."] in notes
-    assert rows(book["P1"])[2][1] == "WT (no Duration)"
+    assert ["LKI WT F5823/IFN 4H/Slice 1/input output", None, "No Treatment time in the folder names."] in notes
+    assert rows(book["P1"])[2][1] == "WT (no Treatment time)"
 
 
 def test_a_file_open_in_excel_is_reported(study, tmp_path, monkeypatch):
@@ -337,10 +337,16 @@ def test_the_window_runs_an_analysis_and_writes_the_tables(app, study, tmp_path,
     assert window.folders_table.item(0, 0).text().endswith("(not reviewed)")
 
     asked = []
-    monkeypatch.setattr(QMessageBox, "question", lambda *args: asked.append(args[2]) or QMessageBox.No)
+    monkeypatch.setattr(analysis_window, "choose", lambda *args: asked.append(args[2]) or None)
     window.start()
-    assert window.worker is None and "were not reviewed in ROI Selection" in asked[0]  # No: nothing is measured
-    monkeypatch.setattr(QMessageBox, "question", lambda *args: QMessageBox.Yes)
+    assert window.worker is None and "were not reviewed in ROI Selection" in asked[0]  # Cancel: nothing is measured
+    monkeypatch.setattr(analysis_window, "choose", lambda *args: analysis_window.LEAVE_OUT)
+    window.start()
+    window.worker.wait()
+    app.processEvents()
+    assert "0 folders measured" in window.status.text() and "3 folders not reviewed in ROI Selection, left out." in \
+        window.status.text()
+    monkeypatch.setattr(analysis_window, "choose", lambda *args: analysis_window.MEASURE_TOO)
     window.start()
     window.worker.wait()
     app.processEvents()
@@ -396,14 +402,25 @@ def test_the_window_asks_before_keeping_folders_of_another_roi_file(app, study, 
     window.output.path.setText(str(tmp_path / "out"))
     window.output_changed()
     asked = []
-    monkeypatch.setattr(QMessageBox, "question",
-                        lambda *args: asked.append(args[2]) or (QMessageBox.Yes if "not reviewed" in args[2] else QMessageBox.No))
+    monkeypatch.setattr(analysis_window, "choose", lambda *args: analysis_window.MEASURE_TOO)
+    monkeypatch.setattr(QMessageBox, "question", lambda *args: asked.append(args[2]) or QMessageBox.No)
     window.start()
     window.worker.wait()
     app.processEvents()
     assert "not in this ROI file (or do not pass the folder filter): 1 folder, for example" in asked[-1]
     assert len(Analysis.load(tmp_path / "out" / FILE_NAME).folders) == 2
     window.close()
+
+
+def test_the_per_slice_file_can_be_turned_off(study, tmp_path):
+    protocol = small_protocol()
+    analysis = measured(study, protocol, tmp_path / "out")
+    protocol.slice_file = False
+    assert analysis.is_current(protocol)  # only which files are written changes: nothing is measured again
+    assert Protocol.from_dict(protocol.to_dict()).slice_file is False
+    analysis.measuring_with(protocol)
+    write_workbooks(analysis)
+    assert (tmp_path / "out" / PER_RECORDING).is_file() and not (tmp_path / "out" / PER_SLICE).exists()
 
 
 def test_extra_recordings_stay_off_the_measure_sheets(study, tmp_path):

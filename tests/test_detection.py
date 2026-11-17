@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from ema.recordings import list_recordings, load_stack
-from ema.roi_selection import RoiSettings, detect_folder, roi_mask, roi_trace
+from ema.roi_selection import RoiSettings, detect_folder, find_electrode, roi_mask, roi_trace
 from ema.roi_selection.detection import detection_files, peak_frame
 
 from conftest import CENTER, ELECTRODE, STIM_FRAME, make_recording
@@ -24,6 +24,16 @@ def test_electrode_is_found(io_folder):
     assert (found & ELECTRODE).sum() >= 0.95 * ELECTRODE.sum()
     assert found.sum() <= 1.6 * ELECTRODE.sum()  # one pixel wider all round, not more
     assert found[:, 0].any()  # the mask reaches the image edge
+
+
+def test_the_thin_tip_of_the_electrode_is_kept():
+    f0 = np.full((64, 64), 500.0)
+    f0[28:37, :40] = 150.0  # the body, 9 pixels wide, from the left edge
+    f0[32, 40:50] = 150.0  # the tip, 1 pixel wide
+    f0[0, :] = 300.0  # a thin dark line along the top edge, joined to nothing
+    found = find_electrode(f0, (54, 32), replace(SETTINGS, electrode_grow_px=0))
+    assert found[32, 49] and not found[32, 51]
+    assert not found[:20].any()
 
 
 def test_electrode_settings_are_used(io_folder):

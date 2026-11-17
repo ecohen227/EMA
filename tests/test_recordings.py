@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import tifffile
 
-from ema.recordings import find_recording_folders, is_no_stim, list_recordings, load_stack
+from ema.recordings import RecordingCache, find_recording_folders, is_no_stim, list_recordings, load_stack
 
 from conftest import FRAMES, SHAPE
 
@@ -20,6 +20,23 @@ def test_first_frame_is_dropped(io_folder):
     stack = load_stack(io_folder / "200uA.tif")
     assert stack.shape == (FRAMES, *SHAPE)
     assert np.array_equal(stack[0], tifffile.imread(io_folder / "200uA.tif")[1])
+
+
+def test_the_recording_cache_reads_each_recording_once(io_folder):
+    reads = []
+    cache = RecordingCache(2, load=lambda path: reads.append(path.name) or load_stack(path))
+    first, second, third = list_recordings(io_folder)[:3]
+    cache.read_ahead([first, second])
+    stack = cache(first)
+    assert np.array_equal(stack, load_stack(first)) and cache(first) is stack
+    cache(second)
+    assert sorted(reads) == [first.name, second.name]  # read ahead, and not again when wanted
+    cache(third)  # only two are kept: the least recently used goes
+    cache(first)
+    assert reads.count(first.name) == 2
+    with pytest.raises(OSError):
+        cache(io_folder / "missing.tif")
+    cache.stop()
 
 
 def test_single_image_is_not_a_movie(recordings):

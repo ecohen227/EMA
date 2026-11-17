@@ -4,7 +4,9 @@ The evoked Excel files
 Every run writes two files into the output folder:
 
 * ``Evoked per recording.xlsx``: one row per recording;
-* ``Evoked per slice.xlsx``: one row per slice (recording folder).
+* ``Evoked per slice.xlsx``: one row per slice (recording folder), unless
+  the protocol has *Write Evoked per slice.xlsx* unticked (tab
+  *Comparisons and summary* of the Evoked Analysis Configurator).
 
 **Example files**, made from eight made-up slices with the built-in
 *2P paired pulse* protocol, grouped by genotype and treatment:

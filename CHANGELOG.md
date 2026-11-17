@@ -1,5 +1,46 @@
 # Changelog
 
+## 3.0.0a6 — 2026-11-16: after the first beta test
+
+### Fixed
+
+- ROI Selection's setup window crashed (`'SetupDialog' object has no attribute 'searched_folder'`) when the output
+  folder already held selections made with a folder filter.
+- The automatic electrode stopped 5 to 7 pixels (80–110 µm) short of the electrode's tip: clearing specks of noise
+  also cleared the tip, which is only 1 or 2 pixels wide. The dark pixels joined to the electrode within 15 pixels
+  of its end nearest the ROI centre are now given back; nothing else changes (checked on 27 folders). Electrodes
+  already saved in ROI files are kept. In the spontaneous analysis, folders without an ROI file entry are searched
+  again once (`AUTOMATIC_VERSION` in `roi_selection/detection.py`).
+- The spontaneous analysis gave no sign of life while it found the electrode and ROI centre of the folders without
+  an ROI file entry: all of them were found before any recording was searched, Stop waited for all of them, and a
+  stopped run kept nothing. Folders are now searched in order, a few at a time; the line under the bar names the
+  folder whose electrode and centre are being found; **Stop** stops at once and keeps every folder finished.
+
+### Faster
+
+- Recordings are read from disk in one go and then decoded, instead of in about 10,000 small reads per file:
+  about 4× faster from a local disk (0.69 → 0.14 s per 56 MB recording on the trial data), and far faster from
+  network, cloud or USB drives. The data are identical (checked on 66 recordings). This speeds up every package.
+- ROI Selection reads the recordings of the folder on show, and those the next folder opens on, in the
+  background; *Detect all folders* reads the next folder while it detects the current one.
+- A mean recording is summed as its recordings are read, instead of holding them all in memory.
+
+### Changed for users
+
+- **Not reviewed**: when some folders to measure were not reviewed in ROI Selection, the analyses ask
+  **Leave out** (measure only the reviewed folders), **Measure too** (use the automatic ROI and electrode) or
+  **Cancel**. Before, *No* measured nothing.
+- **Evoked per slice.xlsx is optional**: *Write Evoked per slice.xlsx* in the configurator's *Comparisons and
+  summary* tab (`"file"` under `slice_summary` in protocol files). Changing it measures nothing again.
+- The default label *Duration* is now *Treatment time*. Labels already saved or remembered keep their names.
+- *Also read the folders above the recordings folder* is now *Also read the recordings folder's own name and the
+  folders above it*, explained with an example in the documentation.
+
+### Documentation
+
+- The page *Choosing evoked measures* is removed.
+- The analysis pages describe the *Not reviewed* question and stopping; the protocol file format lists `file`.
+
 ## 3.0.0a5 — 2026-11-15: audit
 
 An audit of the whole program for biologists' use, documentation, code organisation and speed.

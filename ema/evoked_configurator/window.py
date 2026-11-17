@@ -328,7 +328,12 @@ class ConfiguratorWindow(QMainWindow):
         for item in measures:
             if item.per != part:
                 part = item.per
-                self._add_heading("Per recording" if part == "recording" else "Per slice (all recordings of a folder; not shown on one example)")
+                if part == "recording":
+                    self._add_heading("Per recording")
+                elif self.protocol.slice_file:
+                    self._add_heading("Per slice (all recordings of a folder; not shown on one example)")
+                else:
+                    self._add_heading("Per slice: not written (Evoked per slice.xlsx is turned off)")
             value = values.get(item.name) if part == "recording" else None
             text = "" if value is None else ("–" if not np.isfinite(value) else f"{value:.4g}")
             row = self.table.rowCount()

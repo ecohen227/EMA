@@ -7,7 +7,7 @@ ema/evoked_analysis/window.py and ema/spontaneous_analysis/window.py.
 
 import time
 import traceback
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from PyQt5.QtCore import Qt, QThread, QUrl, pyqtSignal
@@ -39,10 +39,14 @@ from .labels import LabelSet, default_labels
 from .labels_editor import LabelsEditor, NearMissList
 from .roi_selection import Selections
 from .user_settings import remember, remembered
-from .widgets import ERROR_COLOUR, WARNING_COLOUR, FileInput, FolderFilter, FolderInput, coloured, hint, is_inside
+from .widgets import (ERROR_COLOUR, WARNING_COLOUR, FileInput, FolderFilter, FolderInput, choose, coloured, hint,
+                      is_inside)
 
 MISSING = QColor("#fde2e1")
 NOTED = QColor("#fff1d6")
+
+
+LEAVE_OUT, MEASURE_TOO = "Leave out", "Measure too"
 
 
 def _folders(count):
@@ -106,6 +110,7 @@ class AnalysisWindow(QMainWindow):
         self.analysis = kind.analysis(labels=_remembered_labels())
         self.worker = None
         self.started = 0.0
+        self.left_out = []  # folders not reviewed in ROI Selection that the user left out of the run
         self.tables_outdated = False  # labels or groups changed since the tables were written
         self.group_boxes = {}
         self._build_window()
@@ -582,7 +587,10 @@ class AnalysisWindow(QMainWindow):
             the_plan = self.kind.plan(self.analysis, self.method, self.source())
         finally:
             QApplication.restoreOverrideCursor()
-        if not self.confirm(the_plan) or not self.unreviewed_accepted(the_plan):
+        if not self.confirm(the_plan):
+            return
+        the_plan = self.without_unreviewed(the_plan)
+        if the_plan is None:
             return
         keep_others = self.keep_others(the_plan)
         if keep_others is None:
@@ -615,18 +623,26 @@ class AnalysisWindow(QMainWindow):
         )
         return answer == QMessageBox.Yes
 
-    def unreviewed_accepted(self, the_plan):
-        """Ask before folders whose ROI was not reviewed are measured. True to run."""
+    def without_unreviewed(self, the_plan):
+        """Ask whether folders whose ROI was not reviewed are left out or measured. The plan to run; None: do not run."""
+        self.left_out = []
         names = self.unreviewed([self.source().name_of(folder) for folder, _, _ in the_plan.to_measure])
         if not names:
-            return True
+            return the_plan
         examples = "\n".join(names[:3]) + ("\n…" if len(names) > 3 else "")
-        answer = QMessageBox.question(
+        them = "it" if len(names) == 1 else "them"
+        answer = choose(
             self, "Not reviewed",
             f"{_folders(len(names))} to measure {'was' if len(names) == 1 else 'were'} not reviewed in ROI Selection, for "
-            f"example\n\n{examples}\n\nTheir automatic ROI and electrode will be used. Measure them anyway?",
+            f"example\n\n{examples}\n\nLeave {them} out of this run, or measure {them} with the automatic ROI and "
+            "electrode?",
+            LEAVE_OUT, MEASURE_TOO,
         )
-        return answer == QMessageBox.Yes
+        if answer == LEAVE_OUT:
+            self.left_out = names
+            kept = [entry for entry in the_plan.to_measure if self.source().name_of(entry[0]) not in names]
+            return replace(the_plan, to_measure=kept)
+        return the_plan if answer == MEASURE_TOO else None
 
     def keep_others(self, the_plan):
         """Ask whether to keep the folders of earlier runs that are not measured now. None: do not run."""
@@ -662,13 +678,14 @@ class AnalysisWindow(QMainWindow):
         if total and done >= total:
             self.status.setText("Writing the tables…")
         else:
-            self.status.setText(text if text.startswith("Finding") else f"{done} of {total} recordings measured. {text}")
+            plain = text.startswith("Finding")
+            self.status.setText(text if plain else f"{done} of {total} recordings measured. {text}")
 
     def cancel(self):
         if self.worker is not None:
             self.worker.stop = True
             self.cancel_button.setEnabled(False)
-            self.status.setText("Stopping after this recording…")
+            self.status.setText("Stopping…")
 
     def finished(self):
         worker, self.worker = self.worker, None
@@ -696,6 +713,8 @@ class AnalysisWindow(QMainWindow):
                  f"measured ({recordings} recordings), {len(the_plan.unchanged)} unchanged."]
         if skipped:
             lines.append(f"{skipped} recordings not measured: see the Notes sheet.")
+        if self.left_out:
+            lines.append(f"{_folders(len(self.left_out))} not reviewed in ROI Selection, left out.")
         if the_plan.missing:
             lines.append(f"⚠ {_folders(len(the_plan.missing))} of the ROI file not found on this computer.")
         if worker.stop:

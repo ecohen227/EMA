@@ -45,6 +45,16 @@ class Analysis(KeptAnalysis):
     def protocol(self):
         return Protocol.from_dict(self.method) if self.method else None
 
+    def same_method(self, protocol):
+        """Whether the per-slice file is written does not change what is measured."""
+        return _measuring(self.method) == _measuring(protocol.to_dict())
+
+
+def _measuring(data):
+    """A protocol's file contents without the switch for the per-slice file."""
+    summary = {key: value for key, value in data.get("slice_summary", {}).items() if key != "file"}
+    return {**data, "slice_summary": summary}
+
 
 # ---------------------------------------------------------------------------
 # What a run will do

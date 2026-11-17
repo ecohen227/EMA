@@ -73,11 +73,14 @@ can leave them out.
    * comes within the *greatest distance from the ROI* (40 pixels) of the
      centre of the automatic ROI.
 
-   If several shapes pass, the largest is the electrode. If none passes,
-   the folder starts without a mask.
-5. **Tidy up.** Small gaps are closed, holes are filled, and the mask is
-   widened (*grow the mask by*, 1 pixel) to cover the blurred rim of the
-   electrode.
+   Specks of noise, dark shapes thinner than about 3 pixels, are cleared
+   before the shapes are judged. If several shapes pass, the largest is
+   the electrode. If none passes, the folder starts without a mask.
+5. **Tidy up.** Clearing the specks also clears the electrode's tip, which
+   is only 1 or 2 pixels wide, so the dark pixels joined to the electrode
+   within 15 pixels of its end nearest the ROI are given back. Small gaps
+   are then closed, holes are filled, and the mask is widened (*grow the
+   mask by*, 1 pixel) to cover the blurred rim of the electrode.
 
 When the automatic result is wrong
 ----------------------------------

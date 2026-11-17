@@ -5,7 +5,7 @@ All figures on this page are drawn from the sample recordings by EMA's own
 measuring code, with the built-in protocols. Frames count from the second
 frame of the TIFF (see :doc:`../recordings`). Every kinetic and spatial
 measure is described in full, with its formula and its pitfalls, in
-:doc:`measure_reference`; :doc:`choosing_measures` says which to rely on.
+:doc:`measure_reference`.
 
 The trace
 ---------
@@ -282,5 +282,4 @@ conditions is left empty when
 Be careful: with only 4 to 6 recordings per slice, a fit has little
 freedom and its parameters are uncertain; compare them between groups of
 slices, not slice by slice. The top of an input–output curve in dF/F can be
-the ceiling of the sensor rather than of release (see
-:doc:`choosing_measures`).
+the ceiling of the sensor rather than of release.

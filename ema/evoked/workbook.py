@@ -47,14 +47,17 @@ PER_SLICE = "Evoked per slice.xlsx"
 
 
 def write_workbooks(analysis):
-    """Write both files into the analysis's output folder. Returns their paths.
+    """Write both files into the analysis's output folder (the per-slice file only if the protocol says so).
+    Returns their paths.
 
     Raises TablesLocked if a file cannot be replaced (open in Excel); the
     other file is still written.
     """
     protocol = analysis.protocol()
     found = slices(analysis)
-    books = {PER_RECORDING: _per_recording(analysis, protocol, found), PER_SLICE: _per_slice(analysis, protocol, found)}
+    books = {PER_RECORDING: _per_recording(analysis, protocol, found)}
+    if protocol.slice_file:
+        books[PER_SLICE] = _per_slice(analysis, protocol, found)
     return save_workbooks(analysis.folder, books)
 
 

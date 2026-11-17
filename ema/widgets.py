@@ -51,6 +51,20 @@ def is_inside(folder, parent):
     return folder == parent or parent in folder.parents
 
 
+def choose(parent, title, text, *choices):
+    """Ask a question with a button for each choice and a Cancel button; the first choice is the default.
+
+    Returns the chosen text, or None for Cancel.
+    """
+    box = QMessageBox(QMessageBox.Question, title, text, parent=parent)
+    buttons = [box.addButton(choice, QMessageBox.AcceptRole) for choice in choices]
+    box.addButton(QMessageBox.Cancel)
+    box.setDefaultButton(buttons[0])
+    box.exec_()
+    clicked = box.clickedButton()
+    return choices[buttons.index(clicked)] if clicked in buttons else None
+
+
 def scrolled(widget):
     area = QScrollArea()
     area.setWidget(widget)

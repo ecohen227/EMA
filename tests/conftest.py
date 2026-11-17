@@ -38,9 +38,10 @@ def no_unexpected_dialogs(monkeypatch):
     from PyQt5.QtWidgets import QMessageBox
 
     def unexpected(*args, **kwargs):
-        raise AssertionError(f"An unexpected message box: {args[1:3]}")
+        box = args[0] if args and isinstance(args[0], QMessageBox) else None
+        raise AssertionError(f"An unexpected message box: {box.text() if box else args[1:3]}")
 
-    for name in ("question", "warning", "information", "critical"):
+    for name in ("question", "warning", "information", "critical", "exec_"):
         monkeypatch.setattr(QMessageBox, name, unexpected)
 
 

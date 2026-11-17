@@ -26,8 +26,8 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from ..recordings import list_recordings, load_stack
-from .detection import baseline_image, detect, folder_mean, peak_frame, response_at, roi_trace
+from ..recordings import RecordingCache, list_recordings
+from .detection import baseline_image, detect, detection_files, folder_mean, peak_frame, response_at, roi_trace
 from .plots import EDIT_ELECTRODE, MOVE_ROI, ImageView, TraceView
 from .selections import AUTOMATIC, FILE_NAME, MANUAL, FolderSelection
 from .setup_dialog import SetupDialog
@@ -54,8 +54,9 @@ class RoiSelectionWindow(QMainWindow):
         self.output_folder = output_folder
         self.folders = selections.recording_folders()
 
-        # Recordings are large and slow to read, so the last ones stay in memory.
-        self.load = lru_cache(maxsize=24)(load_stack)
+        # Recordings are large and slow to read, so the last ones stay in memory, and the
+        # recordings of the folder on show and of the next folder are read ahead.
+        self.load = RecordingCache(24)
         self.folder_mean = lru_cache(maxsize=2)(self._folder_mean)
         self.detect = lru_cache(maxsize=32)(self._detect)
 
@@ -307,6 +308,7 @@ class RoiSelectionWindow(QMainWindow):
         self.folder = self.folders[row]
         self.recordings = list_recordings(self.folder)
         self.detection = self.selection = self.stack = None
+        self.read_ahead(row)
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
@@ -565,14 +567,33 @@ class RoiSelectionWindow(QMainWindow):
         """Mark the folder reviewed and go to the next folder that is not reviewed yet."""
         self.selection.reviewed = True
         self.save()
-        row = self.folder_list.currentRow()
-        waiting = [r for r in range(row + 1, len(self.folders)) if not self._reviewed(r)]
-        waiting += [r for r in range(row) if not self._reviewed(r)]
-        if waiting:
-            self.folder_list.setCurrentRow(waiting[0])
+        waiting = self._next_unreviewed(self.folder_list.currentRow())
+        if waiting is not None:
+            self.folder_list.setCurrentRow(waiting)
         else:
             self.status.setText(f"✓ All {len(self.folders)} folders are reviewed and saved in "
                                 f"{self.output_folder / FILE_NAME}. You can close this window.")
+
+    def _next_unreviewed(self, row):
+        """The row of the first folder after `row` (then from the top) that is not reviewed; None if none."""
+        rows = [*range(row + 1, len(self.folders)), *range(row)]
+        return next((r for r in rows if not self._reviewed(r)), None)
+
+    def read_ahead(self, row):
+        """Start reading the recordings of this folder, then those the next folder opens on."""
+        self.load.read_ahead(self.recordings)
+        following = self._next_unreviewed(row)
+        if following is None:
+            following = row + 1 if row + 1 < len(self.folders) else None
+        if following is not None:
+            self.read_ahead_folder(self.folders[following])
+
+    def read_ahead_folder(self, folder):
+        """Start reading the recordings a folder's automatic ROI is found from."""
+        try:
+            self.load.read_ahead(detection_files(list_recordings(folder), self.settings))
+        except OSError:  # the folder is gone: it says so when it is opened
+            pass
 
     def _reviewed(self, row):
         selection = self.selections.of(self.folders[row])
@@ -603,6 +624,8 @@ class RoiSelectionWindow(QMainWindow):
             QApplication.processEvents()
             if progress.wasCanceled():
                 break
+            if count + 1 < len(todo):
+                self.read_ahead_folder(todo[count + 1])
             try:
                 detection = self._detect(folder)
             except (OSError, ValueError):
@@ -660,5 +683,6 @@ class RoiSelectionWindow(QMainWindow):
         self.status.setText(f"Table saved: {path}")
 
     def closeEvent(self, event):
+        self.load.stop()
         self.closed.emit()
         super().closeEvent(event)

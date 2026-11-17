@@ -98,10 +98,12 @@ class LabelsEditor(QWidget):
             buttons.addWidget(button)
         buttons.addStretch()
         buttons.addWidget(more)
-        self.whole_path = QCheckBox("Also read the folders above the recordings folder")
+        self.whole_path = QCheckBox("Also read the recordings folder's own name and the folders above it")
         self.whole_path.setToolTip(
-            "Off: only the folders inside the recordings folder of the ROI file are read.\n"
-            "On: the recordings folder and every folder above it are read too (the nearest folder still wins)."
+            "Off: only the folders inside the recordings folder are read.\n"
+            "On: the name of the recordings folder itself, and of every folder above it, are read too. Tick it when\n"
+            "a label is only there, for example when the recordings folder is one animal's folder. A folder nearer\n"
+            "the recording still wins."
         )
         self.whole_path.toggled.connect(self._whole_path_toggled)
 

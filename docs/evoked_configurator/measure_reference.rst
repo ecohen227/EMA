@@ -4,8 +4,7 @@ Evoked measure reference
 Every number a protocol can produce, one by one: how it is named, its unit,
 its definition, its formula, exactly how it is computed, when it is left
 empty, what it reflects, what to be careful of, and a worked example.
-:doc:`measures` shows the measures on real recordings; :doc:`choosing_measures`
-says which ones to rely on.
+:doc:`measures` shows the measures on real recordings.
 
 How measures are named
 ----------------------

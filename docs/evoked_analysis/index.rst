@@ -46,9 +46,11 @@ Step by step
    sheets, such as *Genotype* and *Treatment* for WT CTRL, WT IFN, HET CTRL
    and HET IFN. **Slice sheets** sets the layout of the per-slice sheets.
    See :doc:`tables`.
-7. Press **Run the analysis**. **Stop** stops after the recording being
-   measured; the folders measured so far are kept, and the next run
-   measures the rest.
+7. Press **Run the analysis**. If some folders were not reviewed in ROI
+   Selection, EMA asks first: **Leave out** measures only the reviewed
+   folders, **Measure too** measures the others with their automatic ROI
+   and electrode. **Stop** stops after the recording being measured; the
+   folders measured so far are kept, and the next run measures the rest.
 
 When it is done, both Excel files are in the output folder, and the summary
 under the buttons says how many folders and recordings were measured and

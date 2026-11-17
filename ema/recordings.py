@@ -4,9 +4,13 @@ A recording is a TIFF movie (frames, rows, columns). A recording folder is any
 folder that holds at least one. Recordings are only ever read, never changed.
 """
 
+import io
 import logging
 import os
 import re
+import threading
+from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -51,16 +55,75 @@ def find_recording_folders(root):
 def load_stack(path):
     """Read a recording as an array (frames, rows, columns).
 
+    The file is read from disk in one go and then decoded. Decoding it from
+    the disk directly would read it in thousands of small pieces, which is
+    several times slower, and very slow from network, cloud or USB drives.
+
     The first frame of the TIFF is dropped, so frame 0 here is the second
     frame of the file.
     """
     try:
-        stack = tifffile.imread(path)
+        stack = tifffile.imread(io.BytesIO(Path(path).read_bytes()))
     except tifffile.TiffFileError as error:
         raise ValueError(f"{Path(path).name} cannot be read as a TIFF ({error}).") from error
     if stack.ndim != 3:
         raise ValueError(f"{Path(path).name} is not a movie (its shape is {stack.shape}).")
     return stack[1:]
+
+
+class RecordingCache:
+    """Reads recordings with `load` and keeps the last `size` in memory; call it like `load_stack`.
+
+    `read_ahead(paths)` reads recordings in a background thread, so that
+    they are ready by the time they are wanted. `stop()` drops what is
+    waiting to be read and empties the cache.
+    """
+
+    def __init__(self, size, load=load_stack):
+        self.size = size
+        self._load = load
+        self._stacks = OrderedDict()  # path -> stack, the most recently used last
+        self._reading = {}  # path -> Future of a read ahead
+        self._lock = threading.Lock()
+        self._reader = ThreadPoolExecutor(max_workers=1, thread_name_prefix="EMA read-ahead")
+
+    def __call__(self, path):
+        path = Path(path)
+        with self._lock:
+            if path in self._stacks:
+                self._stacks.move_to_end(path)
+                return self._stacks[path]
+            reading = self._reading.get(path)
+        stack = reading.result() if reading is not None else self._load(path)
+        self._keep(path, stack)
+        return stack
+
+    def read_ahead(self, paths):
+        with self._lock:
+            for path in map(Path, paths):
+                if path not in self._stacks and path not in self._reading:
+                    self._reading[path] = self._reader.submit(self._read, path)
+
+    def stop(self):
+        self._reader.shutdown(wait=False, cancel_futures=True)
+        with self._lock:
+            self._stacks.clear()
+
+    def _read(self, path):
+        try:
+            stack = self._load(path)
+            self._keep(path, stack)
+            return stack
+        finally:
+            with self._lock:
+                self._reading.pop(path, None)
+
+    def _keep(self, path, stack):
+        with self._lock:
+            self._stacks[path] = stack
+            self._stacks.move_to_end(path)
+            while len(self._stacks) > self.size:
+                self._stacks.popitem(last=False)
 
 
 def is_no_stim(path):

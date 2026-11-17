@@ -194,6 +194,7 @@ class Protocol:
     spatial_pulses: list = field(default_factory=lambda: ["P1"])
     near_to_far: list = field(default_factory=list)  # names of comparisons also measured as near-to-far indices
     spatial: SpatialSettings = field(default_factory=SpatialSettings)
+    slice_file: bool = True  # write Evoked per slice.xlsx
     summary_statistics: list = field(default_factory=list)
     summary_condition_range: list = None  # [low, high], or None
     summary_baseline_spread: bool = False
@@ -701,6 +702,7 @@ class Protocol:
                 "settings": self.spatial.to_dict(),
             },
             "slice_summary": {
+                "file": self.slice_file,
                 "statistics": self.summary_statistics,
                 "condition_range": self.summary_condition_range,
                 "baseline_spread": self.summary_baseline_spread,
@@ -749,6 +751,7 @@ class Protocol:
                 spatial_pulses=[str(n) for n in spatial.get("pulses", ["P1"])],
                 near_to_far=[str(n) for n in spatial.get("near_to_far", [])],
                 spatial=SpatialSettings.from_dict(spatial.get("settings", {})),
+                slice_file=bool(summary.get("file", True)),
                 summary_statistics=[_choice(s, STATISTICS, "statistic") for s in summary.get("statistics", [])],
                 summary_condition_range=_range(summary.get("condition_range")),
                 summary_baseline_spread=bool(summary.get("baseline_spread", False)),

@@ -60,5 +60,4 @@ a new name and keeps your version as a protocol of your own.
    walkthrough
    measures
    measure_reference
-   choosing_measures
    protocol_file

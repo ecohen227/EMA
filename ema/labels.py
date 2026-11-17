@@ -126,7 +126,7 @@ class LabelSet:
 
     labels: list = field(default_factory=list)
     ignored: list = field(default_factory=list)  # words that are never near misses
-    whole_path: bool = False  # also read the folders above the recordings folder
+    whole_path: bool = False  # also read the recordings folder's own name and the folders above it
 
     def names(self):
         return [label.name for label in self.labels]
@@ -260,7 +260,7 @@ def default_labels():
         Label("Line", {"GKI": ["GKI"], "LKI": ["LKI"]}),
         Label("Genotype", {"WT": ["WT", "wild type", "wildtype"], "HET": ["HET"]}),
         Label("Treatment", {"CTRL": ["CTRL", "CNTRL", "control"], "IFN": ["IFN", "IFNy", "IFNg", "IFNγ"]}),
-        Label("Duration", {"2H": ["2H", "2HR", "2HRS", "2 hours"], "4H": ["4H", "4HR", "4HRS", "4 hours"]}),
+        Label("Treatment time", {"2H": ["2H", "2HR", "2HRS", "2 hours"], "4H": ["4H", "4HR", "4HRS", "4 hours"]}),
         Label("Sex", {"F": ["F#", "female", "females"], "M": ["M#", "male", "males"]}),
         Label("Animal", patterns=["F#", "M#"]),
         Label("Slice", patterns=["Slice #"]),

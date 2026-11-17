@@ -24,7 +24,9 @@ takes several seconds. Nothing here needs the GUI::
 """
 
 import os
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from collections import deque
+from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
+from concurrent.futures.process import BrokenProcessPool
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +34,7 @@ from pathlib import Path
 from ..kept_results import FolderResult, KeptAnalysis, Plan, RecordingResult, fingerprint, now, why_not_measured
 from ..recordings import find_recording_folders, is_no_stim, list_recordings, load_stack
 from ..roi_selection import RoiSettings, detect_folder
+from ..roi_selection.detection import AUTOMATIC_VERSION
 from .detection import detect
 from .detector import Detector
 from .measures import measure_events, measure_recording, summarise_slice
@@ -112,9 +115,12 @@ class Recordings:
 
 
 def folder_fingerprint(folder, selection):
-    """Changes when a folder's ROI file entry (or that it has none) or its recordings change."""
+    """Changes when a folder's ROI file entry (or that it has none) or its recordings change.
+
+    Without an entry, it also changes when the automatic detection finds electrodes or centres differently.
+    """
     if selection is None:
-        return fingerprint(folder)
+        return fingerprint(folder, automatic=AUTOMATIC_VERSION)
     return fingerprint(folder, roi=[selection.roi_center, selection.image_shape],
                        electrode=selection.to_dict()["electrode"]["rows"], flagged=selection.flagged_files)
 
@@ -169,9 +175,11 @@ def run(analysis, detector, recordings, the_plan=None, progress=None, cancelled=
 
     `recordings` says what is searched (see Recordings). `workers` processes
     search at the same time (1: one after the other, in this process).
-    `progress(done, total, text)` is called as recordings are done; when
-    `cancelled()` returns True the run stops, keeping the folders finished so
-    far. Returns the plan that was run.
+    Folders are searched in order, a few at a time. `progress(done, total,
+    text)` is called as recordings are done, and when the electrode and ROI
+    centre of a folder start to be found. When `cancelled()` returns True the
+    run stops at once: what is being searched is abandoned, and the folders
+    finished so far are kept. Returns the plan that was run.
     """
     the_plan = the_plan or plan(analysis, detector, recordings)
     if the_plan.replace_all:
@@ -206,50 +214,99 @@ def run(analysis, detector, recordings, the_plan=None, progress=None, cancelled=
         if progress is not None:
             progress(done, total, f"{result.name}: {path.name}")
 
-    workers = min(workers or default_workers(), max(total, 1))
-    with one_thread_each(workers) as pool:
-        tasks = []
-        automatic = [folder for folder, selection, _ in the_plan.to_measure if selection is None and searched[folder]]
-        if automatic and progress is not None:
-            progress(0, total, f"Finding the electrode and ROI centre of {len(automatic)} folders")
-        rois = dict(zip(automatic, pool.map(automatic_roi, automatic) if pool else map(automatic_roi, automatic)))
-        for folder, selection, _ in the_plan.to_measure:
-            result = folders[folder][0]
-            if selection is not None:
-                result.source = REVIEWED if selection.reviewed else FROM_ROI_FILE
-                roi = (selection.electrode_mask, tuple(selection.roi_center), tuple(selection.image_shape))
-            elif folder in rois:
-                center, electrode, result.source = rois[folder]
-                roi = (electrode, center, None)
-            if not searched[folder]:
-                _finish(analysis, folder, result, {}, detector)
-            for path in searched[folder]:
-                electrode, center, shape = roi
-                tasks.append((folder, path, (path, electrode, detector.settings, center, shape)))
+    def tell(text):
+        if progress is not None:
+            progress(done, total, text)
 
-        if pool is None:
-            for folder, path, arguments in tasks:
-                if cancelled is not None and cancelled():
-                    break
-                try:
-                    outcome = search_recording(*arguments)
-                except Exception as error:  # noqa: BLE001  one recording must not stop the run
-                    outcome = error
-                report(folder, path, outcome)
+    def stopped():
+        return cancelled is not None and cancelled()
+
+    waiting = deque((folder, selection) for folder, selection, _ in the_plan.to_measure)  # folders not started
+    ready = deque()  # (folder, path, search arguments) of folders whose electrode and centre are known
+    running = {}  # future -> (folder, path), path None while the folder's electrode and centre are found
+
+    def start_folder(folder, selection):
+        result = folders[folder][0]
+        if selection is not None:
+            result.source = REVIEWED if selection.reviewed else FROM_ROI_FILE
+            queue(folder, selection.electrode_mask, tuple(selection.roi_center), tuple(selection.image_shape))
+        elif searched[folder]:
+            tell(f"Finding the electrode and ROI centre of {result.name}")
+            running[submit(automatic_roi, folder)] = (folder, None)
         else:
-            futures = {pool.submit(search_recording, *arguments): (folder, path) for folder, path, arguments in tasks}
-            for future in as_completed(futures):
-                if cancelled is not None and cancelled():
-                    pool.shutdown(wait=True, cancel_futures=True)
-                    break
-                try:
-                    outcome = future.result()
-                except Exception as error:  # noqa: BLE001  one recording, or a process that died, must not stop the run
-                    outcome = error
-                report(*futures[future], outcome)
+            _finish(analysis, folder, result, {}, detector)
+
+    def queue(folder, electrode, center, shape):
+        if not searched[folder]:
+            _finish(analysis, folder, folders[folder][0], {}, detector)
+        for path in searched[folder]:
+            ready.append((folder, path, (path, electrode, detector.settings, center, shape)))
+
+    def finished(future, folder, path):
+        try:
+            outcome = future.result()
+        except Exception as error:  # noqa: BLE001  one recording, or a process that died, must not stop the run
+            outcome = error
+        if path is not None:
+            report(folder, path, outcome)
+        elif not stopping:
+            center, electrode, folders[folder][0].source = outcome if isinstance(outcome, tuple) else (None, None, NONE)
+            queue(folder, electrode, center, None)
+
+    workers = min(workers or default_workers(), max(total, 1))
+    stopping = False
+    with one_thread_each(workers) as pool:
+        submit = _submitter(pool)
+        while waiting or ready or running:
+            stopping = stopped()
+            if stopping:
+                break
+            while len(running) < 2 * workers and (ready or waiting):
+                if ready:
+                    folder, path, arguments = ready.popleft()
+                    running[submit(search_recording, *arguments)] = (folder, path)
+                else:
+                    start_folder(*waiting.popleft())
+            if running:
+                done_now, _ = wait(running, timeout=0.25, return_when=FIRST_COMPLETED)
+                for future in done_now:
+                    finished(future, *running.pop(future))
+        if stopping and pool is not None:
+            _stop_workers(pool)
     if progress is not None:
         progress(total, total, "Done")
     return the_plan
+
+
+def _submitter(pool):
+    """`submit(function, *arguments)`: a Future of the function's result, run in the pool or, without one, here and now."""
+
+    def submit(function, *arguments):
+        future = Future()
+        if pool is not None:
+            try:
+                return pool.submit(function, *arguments)
+            except BrokenProcessPool as error:  # a worker process died (out of memory?): nothing more can run
+                future.set_exception(error)
+                return future
+        try:
+            future.set_result(function(*arguments))
+        except Exception as error:  # noqa: BLE001  reported with the recording
+            future.set_exception(error)
+        return future
+
+    return submit
+
+
+def _stop_workers(pool):
+    """End the worker processes at once, abandoning what they are doing."""
+    for future in list(getattr(pool, "_pending_work_items", {}).values()):
+        future.future.cancel()
+    if hasattr(pool, "terminate_workers"):  # Python 3.14 and later
+        pool.terminate_workers()
+        return
+    for process in list((getattr(pool, "_processes", None) or {}).values()):
+        process.terminate()
 
 
 THREADS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")

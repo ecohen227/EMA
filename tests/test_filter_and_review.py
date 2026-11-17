@@ -108,6 +108,15 @@ def test_setup_dialog_counts_and_saves_the_filter(app, recordings, train_folder,
     assert dialog.selections.recording_folders() == [train_folder]
 
 
+def test_setup_dialog_opens_on_saved_selections_with_a_filter(app, selections, recordings, tmp_path):
+    selections.change_folder_filter(["11p"], [])
+    selections.save(tmp_path / FILE_NAME)
+    user_settings.remember(roi_recordings_folder=str(recordings), roi_output_folder=str(tmp_path))
+    dialog = SetupDialog()  # the saved filter is shown before the folders are looked up
+    assert dialog.filter.words() == (["11p"], [])
+    assert "1 of 2 recording folders" in dialog.match_count.text()
+
+
 def test_setup_dialog_warns_before_saved_folders_are_left_out(app, selections, monkeypatch, tmp_path):
     dialog = SetupDialog(None, selections, tmp_path)
     dialog.filter.only_with.setText("11p")

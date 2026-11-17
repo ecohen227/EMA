@@ -11,6 +11,10 @@ from scipy import ndimage
 
 from ..recordings import has_skip_word, is_no_stim, list_recordings, load_stack
 
+# Raised when what the automatic detection finds changes, so that results that used it are measured again.
+AUTOMATIC_VERSION = 2
+TIP_PX = 15  # how far from the electrode's end nearest the ROI centre its thin tip is given back
+
 IMAGE_EDGES = {
     "left": np.s_[:, 0],
     "right": np.s_[:, -1],
@@ -93,7 +97,8 @@ def find_electrode(f0, center, settings):
         return np.zeros(f0.shape, bool)
 
     surroundings = ndimage.median_filter(f0, size=settings.electrode_surround_px)
-    dark = ndimage.binary_opening(f0 < settings.electrode_threshold * surroundings)
+    dark_pixels = f0 < settings.electrode_threshold * surroundings
+    dark = ndimage.binary_opening(dark_pixels)  # without specks of noise: shapes thinner than about 3 pixels
     shapes, count = ndimage.label(dark)
 
     y, x = np.indices(f0.shape)
@@ -104,10 +109,24 @@ def find_electrode(f0, center, settings):
         return np.zeros(f0.shape, bool)
 
     electrode = max(electrodes, key=np.count_nonzero)
+    electrode = _with_tip(electrode, dark_pixels, distance)
     electrode = ndimage.binary_fill_holes(_close_gaps(electrode))
     if settings.electrode_grow_px > 0:
         electrode = ndimage.binary_dilation(electrode, iterations=settings.electrode_grow_px)
     return electrode
+
+
+def _with_tip(electrode, dark_pixels, distance):
+    """The electrode with the dark pixels joined to it within TIP_PX of its end nearest the ROI centre.
+
+    Clearing the specks of noise also clears the tip, which is only 1 or 2
+    pixels wide. Nothing is given back elsewhere, so that thin dark lines
+    along the image edge stay out.
+    """
+    tip = np.unravel_index(np.argmin(np.where(electrode, distance, np.inf)), electrode.shape)
+    rows, columns = np.indices(electrode.shape)
+    near_tip = np.hypot(rows - tip[0], columns - tip[1]) <= TIP_PX
+    return ndimage.binary_propagation(electrode, mask=electrode | (dark_pixels & near_tip))
 
 
 def _close_gaps(mask, width=2):
@@ -165,16 +184,17 @@ def detection_files(paths, settings):
 
 def mean_recording(paths, load=load_stack):
     """The frame-by-frame mean of several recordings: one movie that stands for all of them."""
-    stacks = [load(path) for path in paths]
-    if len(stacks) == 1:
-        return stacks[0]
-    if len({stack.shape for stack in stacks}) > 1:
-        names = ", ".join(path.name for path in paths)
-        raise ValueError(f"{names} do not have the same size, so they cannot be averaged.")
-    total = np.zeros(stacks[0].shape, np.float32)
-    for stack in stacks:
+    first = load(paths[0])
+    if len(paths) == 1:
+        return first
+    total = first.astype(np.float32)
+    for path in paths[1:]:
+        stack = load(path)
+        if stack.shape != first.shape:
+            names = ", ".join(path.name for path in paths)
+            raise ValueError(f"{names} do not have the same size, so they cannot be averaged.")
         total += stack
-    return total / len(stacks)
+    return total / len(paths)
 
 
 def detect(stack, settings, files=()):

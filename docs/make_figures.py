@@ -112,7 +112,7 @@ def procedure_electrode(f0, center):
     show(axes[3], verdict, f"4  Dark shapes (below {SETTINGS.electrode_threshold:.2f})", None)
     axes[3].text(3, 122, "cyan: looks like the electrode\nred: too small, too far or not at the edge",
                  color="white", fontsize=6.5)
-    show(axes[4], f0, "5  Close gaps, fill holes, grow", "gray")
+    show(axes[4], f0, "5  Tip back, gaps closed, grown", "gray")
     outline(axes[4], electrode)
     axes[4].plot(*center, "+", color="yellow", markersize=10)
     save(figure, "procedure_electrode.png")

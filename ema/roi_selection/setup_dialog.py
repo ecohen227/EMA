@@ -74,6 +74,7 @@ class SetupDialog(QDialog):
         self.filter.changed.connect(self.show_matching_folders)
         self.match_count = QLabel()
         self.all_folders = []  # every recording folder under the recordings folder
+        self.searched_folder = None  # the folder `all_folders` was found in
         self.form = RoiSettingsForm(selections.settings if running else RoiSettings())
         self.note = QLabel()
         self.note.setWordWrap(True)
@@ -131,6 +132,8 @@ class SetupDialog(QDialog):
 
     def show_matching_folders(self):
         """Say how many folders pass the filter, and offer those as examples."""
+        if self.searched_folder is None:  # the folders are not looked up yet
+            return
         matching = self.matching_folders()
         if self.all_folders:
             self.match_count.setText(f"{len(matching)} of {len(self.all_folders)} recording folders will be used.")

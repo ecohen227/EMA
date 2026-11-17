@@ -53,8 +53,12 @@ The window works like the Evoked Analysis's (see
    Evoked Analysis (see :doc:`../evoked_analysis/labels`); both analyses
    start with the labels last used in either.
 6. **Group by** and **Slice sheets**: the groups of the Prism sheets.
-7. **Run the analysis**. **Stop** stops after the recordings being searched;
-   the folders finished so far are kept.
+7. **Run the analysis**. If some folders of the ROI file were not reviewed
+   in ROI Selection, EMA asks first whether to leave them out or search them
+   too. Folders are searched in order, a few at a time; for a folder that
+   is not in the ROI file, the line under the bar first says *Finding the
+   electrode and ROI centre*. **Stop** stops at once: the folders finished
+   so far are kept, and the next run searches the rest.
 
 What is searched in each folder
 -------------------------------
@@ -119,6 +123,9 @@ run with the same output folder searches only what it has to:
        (or the ROI file now covers it, or no longer does), or a recording
        was added, replaced or removed
      - That folder is searched again.
+   * - A new version of EMA finds the electrode or the ROI centre
+       differently
+     - The folders without an ROI file entry are searched again.
    * - A folder is no longer under the recordings folder (or in the folder
        filter)
      - EMA asks whether to keep its results.

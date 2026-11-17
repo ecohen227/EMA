@@ -256,6 +256,11 @@ Comparisons
    (0.5) or in percent (50 %). *Add every pulse relative to the first* adds
    one for every pulse.
 
+Per-slice file
+   *Write Evoked per slice.xlsx*: untick it when one row per recording is
+   all you need. The slice summary and the fits across conditions are then
+   not written, and the tables are not measured again.
+
 Slice summary
    One value per slice from all its recordings: the minimum, maximum and
    mean of every measure, the mean over a range of conditions (for example

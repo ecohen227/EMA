@@ -35,8 +35,8 @@ An example, the built-in 2P protocol:
      "fits": [{"name": "Tau", "kind": "single", "after": "P1", "start": 4, "length": 412}],
      "kinetics": {"measures": [], "pulses": null, "smoothing_frames": 3},
      "spatial": {"measures": [], "pulses": ["P1"], "near_to_far": [], "settings": {"frames_before_peak": 1, "…": "…"}},
-     "slice_summary": {"statistics": ["min", "max", "mean"], "condition_range": [100.0, 400.0], "baseline_spread": true,
-                       "condition_fits": []}
+     "slice_summary": {"file": true, "statistics": ["min", "max", "mean"], "condition_range": [100.0, 400.0],
+                       "baseline_spread": true, "condition_fits": []}
    }
 
 .. list-table::
@@ -94,7 +94,8 @@ An example, the built-in 2P protocol:
        comparisons also measured as near-to-far indices; ``settings``: the
        settings of the maps and rings (see below).
    * - ``slice_summary``
-     - ``statistics`` (any of ``"min"``, ``"max"``, ``"mean"``),
+     - ``file``: whether ``Evoked per slice.xlsx`` is written (``true`` when
+       missing); ``statistics`` (any of ``"min"``, ``"max"``, ``"mean"``),
        ``condition_range`` (``[low, high]`` or ``null``),
        ``baseline_spread`` (``true`` or ``false``) and ``condition_fits``:
        each with its ``name``, the per-recording ``measure`` it is fitted to,
