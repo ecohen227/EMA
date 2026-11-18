@@ -406,7 +406,10 @@ class PulsesEditor(Editor):
         self.pulses = Rows(["Pulse", "Stimulus", "Peak\nfrom", "\nup to", "Baseline", "Per\nrecording", ""])
         add_pulse = QPushButton("Add pulse")
         add_pulse.clicked.connect(self.add_pulse)
-        self.box("Pulses", self.pulses, row_of(add_pulse),
+        self.write_peaks = check_box(False, self._set_write_peaks, "Write the peak of each pulse too (P1 peak, …)")
+        self.write_peaks.setToolTip("The response of each pulse (its dF/F) is always written. Tick this to also write "
+                                    "its peak: the maximum of the trace over the peak window, in the unit of the trace.")
+        self.box("Pulses", self.pulses, row_of(add_pulse), self.write_peaks,
                  explanation="The maximum of the trace over a peak window is the peak of the pulse. The stimulus is only used "
                              "for the response shape (time to peak, area). 'Per recording' gives a pulse its own timing in each "
                              "listed recording, e.g. a recovery pulse after different delays.")
@@ -420,6 +423,9 @@ class PulsesEditor(Editor):
         self.in_frames.setChecked(not self.units.in_ms)
         for button in (self.in_frames, self.in_ms):
             button.blockSignals(False)
+        self.write_peaks.blockSignals(True)
+        self.write_peaks.setChecked(p.write_peaks)
+        self.write_peaks.blockSignals(False)
         listed = p.selection == LISTED
         per_recording_tip = "" if listed else "Only possible when only listed recordings are measured (Recordings tab)."
 
@@ -448,6 +454,10 @@ class PulsesEditor(Editor):
             toggle.setToolTip(per_recording_tip)
             self.pulses.add(name_box(pulse.name, lambda new, old=pulse.name: self.rename(old, new)), *timing, baseline, toggle,
                             remove_button(lambda _=False, pl=pulse: self._remove_pulse(pl), pulse.name))
+
+    def _set_write_peaks(self, on):
+        self.protocol.write_peaks = on
+        self.changed.emit(True)
 
     def _window_boxes(self, store, window):
         start, end = FrameBox(self.units, window.start), FrameBox(self.units, window.end)

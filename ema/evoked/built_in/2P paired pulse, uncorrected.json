@@ -51,6 +51,7 @@
       "length": 412
     }
   ],
+  "write_peaks": false,
   "kinetics": {
     "measures": [],
     "pulses": null,
@@ -78,9 +79,16 @@
     }
   },
   "slice_summary": {
+    "file": true,
     "statistics": ["min", "max", "mean"],
-    "condition_range": [100.0, 400.0],
+    "means": [
+      {
+        "name": "100-400",
+        "condition_range": [100.0, 400.0]
+      }
+    ],
     "baseline_spread": true,
     "condition_fits": []
-  }
+  },
+  "exclusions": []
 }

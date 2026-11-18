@@ -33,8 +33,8 @@ one slice, one animal or a whole study. For example:
                        └── no1.tif … no5.tif
 
 The names of the folders above a recording folder carry its
-:term:`labels <label>`: line, genotype, treatment, duration, sex, animal and
-slice (see :doc:`evoked_analysis/labels`). Here they are LKI, HET, IFN, 4H,
+:term:`labels <label>`: line, genotype, treatment, treatment time, sex,
+animal and slice (see :doc:`evoked_analysis/labels`). Here they are LKI, HET, IFN, 4H,
 F, 5819 and 2.
 
 File names

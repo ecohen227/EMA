@@ -15,7 +15,9 @@ Evoked per slice.xlsx
     that label.
 
 Both end with *Notes* (what was skipped or could not be measured, and why)
-and *About* (the protocol, the labels, and what every measure is).
+and *About* (the protocol, the labels, and what every measure is). When the
+protocol has exclusions, the slices they leave out are in neither file, and
+both have an *Exclusions* sheet with the value of every slice.
 """
 
 from datetime import datetime
@@ -31,6 +33,7 @@ from ..excel import (
     cell,
     column_table,
     finish_table,
+    group_name,
     grouped_table,
     groups,
     heading,
@@ -41,6 +44,7 @@ from ..excel import (
     slices,
     write_title,
 )
+from .exclusions import judge, left_out
 
 PER_RECORDING = "Evoked per recording.xlsx"
 PER_SLICE = "Evoked per slice.xlsx"
@@ -55,9 +59,12 @@ def write_workbooks(analysis):
     """
     protocol = analysis.protocol()
     found = slices(analysis)
-    books = {PER_RECORDING: _per_recording(analysis, protocol, found)}
+    verdicts = judge(protocol, found, lambda item: group_name(analysis, item.group))
+    out = left_out(verdicts)
+    kept = [item for item in found if item.key not in out]
+    books = {PER_RECORDING: _per_recording(analysis, protocol, kept, verdicts)}
     if protocol.slice_file:
-        books[PER_SLICE] = _per_slice(analysis, protocol, found)
+        books[PER_SLICE] = _per_slice(analysis, protocol, kept, verdicts)
     return save_workbooks(analysis.folder, books)
 
 
@@ -66,7 +73,7 @@ def write_workbooks(analysis):
 # ---------------------------------------------------------------------------
 
 
-def _per_recording(analysis, protocol, found):
+def _per_recording(analysis, protocol, found, verdicts):
     workbook = Workbook()
     measures = [m for m in protocol.measures() if m.per == "recording"]
     label_names = analysis.labels.names()
@@ -113,13 +120,14 @@ def _per_recording(analysis, protocol, found):
         bold_rows(sheet, (3, 4))
         sheet.freeze_panes = "B5"
 
-    notes += _notes(found, per_recording=True)
+    notes += _notes(found, per_recording=True) + _exclusion_notes(verdicts)
     notes_sheet(workbook, notes)
-    _about_sheet(workbook, analysis, protocol, measures)
+    _exclusions_sheet(workbook, analysis, protocol, verdicts)
+    _about_sheet(workbook, analysis, protocol, measures, verdicts)
     return workbook
 
 
-def _per_slice(analysis, protocol, found):
+def _per_slice(analysis, protocol, found, verdicts):
     workbook = Workbook()
     measures = [m for m in protocol.measures() if m.per == "slice"]
     label_names = analysis.labels.names()
@@ -152,8 +160,9 @@ def _per_slice(analysis, protocol, found):
                      for group, members in by_group.items()}
             grouped_table(sheet, title, rows_label, pairs)
 
-    notes_sheet(workbook, _notes(found, per_recording=False))
-    _about_sheet(workbook, analysis, protocol, measures)
+    notes_sheet(workbook, _notes(found, per_recording=False) + _exclusion_notes(verdicts))
+    _exclusions_sheet(workbook, analysis, protocol, verdicts)
+    _about_sheet(workbook, analysis, protocol, measures, verdicts)
     return workbook
 
 
@@ -229,15 +238,56 @@ def _notes(found, per_recording):
     return notes
 
 
-def _about_sheet(workbook, analysis, protocol, measures):
+def _exclusion_notes(verdicts):
+    """A note for each slice an exclusion leaves out, or could not test."""
+    return [[v.slice.result.name, "", v.why] for v in verdicts if v.why]
+
+
+def _exclusions_sheet(workbook, analysis, protocol, verdicts):
+    """The exclusions, then one row per slice and exclusion: its value, the limits, and whether it is left out."""
+    if not protocol.exclusions:
+        return
+    sheet = workbook.create_sheet("Exclusions")
+    count = len(left_out(verdicts))
+    write_title(sheet, "Exclusions", f"{count} of {len({v.slice.key for v in verdicts})} slices are left out of both "
+                                     "files (per recording and per slice). A slice is left out when any exclusion says so.")
+    units = {m.name: m.unit for m in protocol.recording_measures()}
+    for number, exclusion in enumerate(protocol.exclusions, 1):
+        unit = exclusion.unit(units.get(exclusion.measure, ""))
+        sheet.append([f"Exclusion {number}", f"{exclusion.value_text(protocol.condition_label)}; left out when "
+                                             f"{exclusion.test_text(unit)}."])
+        sheet.cell(sheet.max_row, 1).font = BOLD
+    sheet.append([])
+    sheet.append(["Folder", "Group", "Exclusion", "Value", "Unit", "Lowest kept", "Highest kept", "Left out"])
+    header = sheet.max_row
+    bold_rows(sheet, (header,))
+    for verdict in sorted(verdicts, key=lambda v: v.number):
+        exclusion = protocol.exclusions[verdict.number - 1]
+        sheet.append([verdict.slice.result.name, group_name(analysis, verdict.slice.group), verdict.number,
+                      cell(verdict.value), exclusion.unit(units.get(exclusion.measure, "")), cell(verdict.low),
+                      cell(verdict.high), "yes" if verdict.left_out else ("not tested" if verdict.why else "no")])
+    sheet.freeze_panes = sheet.cell(header + 1, 2).coordinate
+    for letter, width in zip("ABCDEFGH", (40, 18, 10, 12, 8, 13, 13, 11)):
+        sheet.column_dimensions[letter].width = width
+
+
+def _about_sheet(workbook, analysis, protocol, measures, verdicts):
     sheet = workbook.create_sheet("About")
+    out = len(left_out(verdicts))
+    slices_text = f"{sum(bool(r.recordings) for r in analysis.folders.values())} recording folders, one slice each"
+    if protocol.exclusions:
+        slices_text += f"; {out} left out by the exclusions (see the Exclusions sheet)"
+    units = {m.name: m.unit for m in protocol.recording_measures()}
+    exclusions = [("Exclusions" if n == 1 else "", f"{n}. {e.value_text(protocol.condition_label)}; left out when "
+                   f"{e.test_text(e.unit(units.get(e.measure, '')))}.") for n, e in enumerate(protocol.exclusions, 1)]
     lines = [
         ("Made by", f"EMA {__version__}, Evoked Analysis, on {datetime.now():%d %B %Y at %H:%M}"),
         ("Protocol", protocol.name),
         ("", protocol.description),
         ("Trace", protocol.trace_explanation()),
         ("ROI file", analysis.roi_file),
-        ("Slices", f"{sum(bool(r.recordings) for r in analysis.folders.values())} recording folders, one slice each"),
+        ("Slices", slices_text),
+        *exclusions,
         ("Groups", "Slices are grouped by " + (", ".join(analysis.group_by) if analysis.group_by else "nothing (one group)")),
         *label_lines(analysis.labels),
         ("Empty cells", "A measure that could not be measured is left empty, never 0. The Notes sheet says why."),

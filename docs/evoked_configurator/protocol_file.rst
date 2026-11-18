@@ -33,10 +33,13 @@ An example, the built-in 2P protocol:
      ],
      "comparisons": [{"name": "PPR", "pulse": "P2", "relative_to": "P1", "as": "ratio"}],
      "fits": [{"name": "Tau", "kind": "single", "after": "P1", "start": 4, "length": 412}],
+     "write_peaks": false,
      "kinetics": {"measures": [], "pulses": null, "smoothing_frames": 3},
      "spatial": {"measures": [], "pulses": ["P1"], "near_to_far": [], "settings": {"frames_before_peak": 1, "…": "…"}},
-     "slice_summary": {"file": true, "statistics": ["min", "max", "mean"], "condition_range": [100.0, 400.0],
-                       "baseline_spread": true, "condition_fits": []}
+     "slice_summary": {"file": true, "statistics": ["min", "max", "mean"],
+                       "means": [{"name": "100-400", "condition_range": [100.0, 400.0]}],
+                       "baseline_spread": true, "condition_fits": []},
+     "exclusions": []
    }
 
 .. list-table::
@@ -84,6 +87,11 @@ An example, the built-in 2P protocol:
      - ``kind``: ``"single"`` or ``"double"``; ``after``: the pulse whose
        maximum the fit starts after (``null`` for a fixed frame); ``start``:
        frames after that maximum (or the first frame); ``length``: frames.
+   * - ``write_peaks``
+     - ``true`` to write each pulse's peak (``P1 peak``) as well as its
+       response. The peaks are always measured, so a fit across conditions
+       or an exclusion can use them either way. A file without this entry
+       was saved before it could be chosen, and writes them.
    * - ``kinetics``
      - ``measures``: names from the kinetic table in :doc:`measures`;
        ``pulses``: the pulses they are measured on (``null`` for every pulse);
@@ -96,14 +104,59 @@ An example, the built-in 2P protocol:
    * - ``slice_summary``
      - ``file``: whether ``Evoked per slice.xlsx`` is written (``true`` when
        missing); ``statistics`` (any of ``"min"``, ``"max"``, ``"mean"``),
-       ``condition_range`` (``[low, high]`` or ``null``),
+       ``means``: the means over some recordings, each with its ``name`` (the
+       end of its column names) and either a ``condition_range``
+       (``[low, high]``) or ``files``, a list of file names such as
+       ``["hi*"]`` (``*`` stands for any characters, ``?`` for one);
        ``baseline_spread`` (``true`` or ``false``) and ``condition_fits``:
        each with its ``name``, the per-recording ``measure`` it is fitted to,
        its ``model`` (``"recovery"`` or ``"saturation"``) and, for a
        recovery, the ``plateau`` it is fixed at (``null`` to fit it).
+   * - ``exclusions``
+     - The rules that leave slices out of both tables (see below).
 
 Frame 0 is the second frame of the TIFF: the first is dropped when a
 recording is read.
+
+Each exclusion, for example the spread of B1 with Tukey's fences:
+
+.. code-block:: json
+
+   {"measure": "B1", "statistic": "spread of largest", "recordings": "all",
+    "test": "interquartile", "factor": 1.5, "limit": 0.0, "side": "either", "among": "all slices"}
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Entry
+     - Meaning
+   * - ``measure``
+     - A per-recording measure, peaks included.
+   * - ``statistic``
+     - How it is combined over the slice's recordings into one value:
+       ``"spread of largest"`` ((largest − smallest) ÷ largest × 100),
+       ``"spread of smallest"`` ((largest − smallest) ÷ smallest × 100),
+       ``"range"`` (largest − smallest), ``"coefficient of variation"``
+       (standard deviation ÷ mean × 100), ``"mean"``, ``"median"``,
+       ``"smallest"`` or ``"largest"``.
+   * - ``recordings``
+     - ``"all"``, or ``{"condition_range": [low, high]}``, or
+       ``{"files": ["hi*"]}``, as for the means over recordings.
+   * - ``test``
+     - ``"interquartile"``: left out below Q1 − k·IQR or above Q3 + k·IQR of
+       the slices; ``"standard deviations"``: more than k standard deviations
+       from their mean; ``"above"`` or ``"below"``: beyond ``limit``.
+   * - ``factor``
+     - k, for ``"interquartile"`` and ``"standard deviations"``.
+   * - ``limit``
+     - The limit, for ``"above"`` and ``"below"``, in the unit of the value.
+   * - ``side``
+     - ``"either"``, ``"high"`` (only values that are too high count) or
+       ``"low"``.
+   * - ``among``
+     - ``"all slices"`` or ``"its group"`` (the groups chosen in Evoked
+       Analysis).
 
 The settings of the maps and rings under ``spatial.settings``, with their
 names on the *Spatial* tab (see :doc:`measures` for what each does):

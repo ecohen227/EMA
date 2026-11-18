@@ -11,6 +11,7 @@ from ..paths import USER_PROTOCOLS
 from ..recordings import FRAME_MS
 from .protocol import (
     AS_LISTED,
+    BY_CONDITION,
     EVERY,
     LISTED,
     NO_PARTNER,
@@ -25,6 +26,7 @@ from .protocol import (
     Pulse,
     PulseTiming,
     Recording,
+    SliceMean,
     Window,
 )
 
@@ -37,7 +39,7 @@ def paired_pulse(corrected=True):
         name = "2P paired pulse"
         description = (
             "Two pulses 4 s apart. Each stimulated recording is corrected for bleaching with the unstimulated one "
-            "recorded right after it. Measured: baselines, peaks, dF/F of each pulse, the paired-pulse ratio, the decay "
+            "recorded right after it. Measured: baselines, dF/F of each pulse, the paired-pulse ratio, the decay "
             "time constant after P1, and per-slice summaries over the currents."
         )
     else:
@@ -63,7 +65,7 @@ def paired_pulse(corrected=True):
         comparisons=[Comparison("PPR", "P2", "P1", RATIO_SCALE)],
         fits=[Fit("Tau", "P1", 4, 412)],
         summary_statistics=["min", "max", "mean"],
-        summary_condition_range=[100.0, 400.0],
+        summary_means=[SliceMean("100-400", BY_CONDITION, 100.0, 400.0)],
         summary_baseline_spread=True,
     )
 

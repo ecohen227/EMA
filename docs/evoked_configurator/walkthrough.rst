@@ -158,6 +158,14 @@ Pulses
    Each has a name, the frame of its **stimulus**, a **peak window** and the
    baseline it is measured from.
 
+Write the peak of each pulse too
+   The tables always have each pulse's response (``P1 response``). Tick this
+   to also write its peak (``P1 peak``): the maximum of the trace over the
+   peak window, in the unit of the trace. It is off in the built-in and new
+   protocols, and on in protocols saved before it could be chosen. The peaks are
+   measured either way, so a fit across conditions or an exclusion can use
+   them, and ticking it later measures nothing again.
+
 Per recording
    A baseline or pulse whose timing differs between recordings, such as a
    recovery pulse after different delays, is set *per recording*. Its
@@ -262,9 +270,18 @@ Per-slice file
    not written, and the tables are not measured again.
 
 Slice summary
-   One value per slice from all its recordings: the minimum, maximum and
-   mean of every measure, the mean over a range of conditions (for example
-   100 to 400 µA), and how much each baseline varies between recordings.
+   One value per slice from its recordings: the minimum, maximum and mean of
+   every measure over all of them, and how much each baseline varies between
+   recordings.
+
+   *Add mean over recordings* adds a mean over some of them, *with a
+   condition from* one value to another (for example 100 to 400 µA) or
+   *named* like the file names typed (for example ``hi*`` for ``hi1.tif`` to
+   ``hi4.tif``, or ``hi1, hi2``; ``*`` stands for any characters, upper and
+   lower case alike). Its columns are named after it: ``P1 response mean
+   100-400``, ``P1 response mean hi``. The name follows the range or the
+   file names until you type another. In a protocol that lists its
+   recordings, the first mean added takes them by name (``hi*``).
 
 Fits across conditions
    A curve fitted per slice to one measure against the condition of its
@@ -278,8 +295,69 @@ Fits across conditions
    .. figure:: ../screenshots/configurator_summary.png
       :width: 100%
 
-      The last tab of the 11P protocol after *Add fit across conditions*:
-      a recovery fit of P11/P1 whose plateau is fixed at 100 %.
+      The *Comparisons and summary* tab of the 11P protocol after *Add mean over recordings* (a
+      mean over the recordings named hi*) and *Add fit across conditions* (a
+      recovery fit of P11/P1 whose plateau is fixed at 100 %).
+
+8. Exclusions
+-------------
+
+.. figure:: ../screenshots/configurator_exclusions.png
+   :width: 100%
+
+   An exclusion that leaves out the slices whose baseline B1 changed
+   unusually much between their recordings, tried on the results of an
+   earlier analysis.
+
+A slice (one recording folder) is left out of both files, *Evoked per
+recording.xlsx* and *Evoked per slice.xlsx*, when any exclusion says so.
+*Add exclusion* adds one; each reads as a sentence:
+
+Value of a slice
+   One measure of the slice's recordings combined into one value: its
+   **spread** ((largest − smallest) ÷ largest × 100, or ÷ smallest), its
+   **range** (largest − smallest), its **coefficient of variation** (standard
+   deviation ÷ mean × 100), or its mean, median, smallest or largest value.
+   Any per-recording measure can be used, peaks included.
+
+Over
+   All its recordings, those with a condition in a range (such as 100 to
+   400 µA), or those named like the file names typed (such as ``hi*``).
+
+Left out when it is
+   *Outside Q1 − k·IQR to Q3 + k·IQR*: below the first quartile of the
+   slices minus k times their interquartile range, or above the third
+   quartile plus k times it. k = 1.5 is the usual choice for outliers
+   (Tukey's fences); k = 0 leaves out every slice outside the interquartile
+   range itself, half of them. *More than k standard deviations from the
+   mean* works the same way with the mean. *Above a limit* and *below a
+   limit* use a fixed number instead. The quartiles need at least 4 slices,
+   the standard deviation 3; with fewer, nothing is left out.
+
+Unusual
+   Whether values that are *too high or too low* count, or only one side.
+   *Among* all slices, or only the slices of its group (the groups chosen in
+   Evoked Analysis, such as WT CTRL), so that a group whose slices all
+   differ from the others is not left out as a whole.
+
+The quartiles and means are worked out from every slice before any is left
+out, so the order of the exclusions does not matter. For example, the
+largest percent difference in B1 between the recordings of a slice,
+(largest B1 − smallest B1) ÷ largest B1, is *spread: (largest − smallest)
+÷ largest × 100* of B1 over all its recordings; with *outside Q1 − 1.5·IQR to
+Q3 + 1.5·IQR*, *too high only*, a slice whose baseline drifted far more than
+the others' is left out.
+
+Try them
+   *Results of an analysis…* takes the output folder of an earlier evoked
+   analysis and lists, for every slice and exclusion, its value, the range
+   that is kept and whether it would be left out, before anything is run.
+   The slices that would be left out are listed first.
+
+Exclusions are applied when the tables are written, from the results kept in
+the output folder: changing them measures nothing again. Both files get an
+*Exclusions* sheet, and the *Notes* sheet says why each slice was left out
+(see :doc:`../evoked_analysis/tables`).
 
 The line under the tabs says whether the protocol is complete. In red: what
 must be fixed before it can be saved. In orange: what cannot be measured on

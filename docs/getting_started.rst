@@ -52,4 +52,4 @@ package. *Documentation* opens these pages.
 it uses, and :doc:`recordings` says how your recordings should be named and
 arranged.
 
-Next: :doc:`roi_selection/index`.
+Next: :doc:`quick_start`, your first analysis with the defaults.

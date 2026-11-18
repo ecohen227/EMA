@@ -39,7 +39,7 @@ BASIC = [
     dict(
         key="peak",
         title="Peak",
-        name="the pulse's name, for example ``P1``",
+        name="``<pulse> peak``, for example ``P1 peak``",
         unit="as the baseline",
         definition="The maximum of the trace over the pulse's peak window.",
         formula="the largest of trace(start), trace(start + 1), …, trace(end − 1)",
@@ -52,7 +52,7 @@ BASIC = [
         caveats="The maximum of a noisy trace sits above the true top, by roughly the noise SD × √(2 ln n) for n "
                 "frames of flat trace: more for long windows and small responses. A window that also covers the "
                 "end of an earlier response can take its maximum there.",
-        example="Trace values over the window of P1 whose largest is 900 counts, at frame 112: P1 = 900 counts, "
+        example="Trace values over the window of P1 whose largest is 900 counts, at frame 112: P1 peak = 900 counts, "
                 "peak frame 112.",
     ),
     dict(
@@ -71,7 +71,7 @@ BASIC = [
                 "light from elsewhere (autofluorescence, a camera offset, scattered light) lowers it, most where "
                 "the sensor is dim. A saturated sensor compresses large responses. The noise bias of the peak "
                 "carries over.",
-        example="B1 = 600 counts and P1 = 900 counts: 900 ÷ 600 × 100 − 100 = 50 %.",
+        example="B1 = 600 counts and P1 peak = 900 counts: 900 ÷ 600 × 100 − 100 = 50 %.",
     ),
     dict(
         key="response ratio",
@@ -87,7 +87,7 @@ BASIC = [
         caveats="Close to, but not the same as, dF/F: it is relative to the unstimulated brightness, not to the "
                 "stimulated recording's own baseline. The two differ by the factor 1 + baseline ÷ 100, within a few "
                 "% when the baseline is near 0.",
-        example="BL = −1.0 % and P1 = 33.0 %: 33.0 − (−1.0) = 34.0 percentage points.",
+        example="BL = −1.0 % and P1 peak = 33.0 %: 33.0 − (−1.0) = 34.0 percentage points.",
     ),
     dict(
         key="comparison",
@@ -169,23 +169,28 @@ SLICE = [
         example="PPR of 0.55, 0.60 and empty in three recordings: PPR min = 0.55, max = 0.60, mean = 0.575.",
     ),
     dict(
-        key="range mean",
-        title="Mean over a range of conditions",
-        name="``<measure> mean <low>-<high>``, for example ``P1 response mean 100-400``",
+        key="recordings mean",
+        title="Mean over some recordings",
+        name="``<measure> mean <name of the mean>``, for example ``P1 response mean 100-400`` or ``P2/P1 mean hi``",
         unit="as the measure",
-        definition="The mean of a per-recording measure over the recordings whose condition is from low to high, "
-                   "both included.",
-        formula="sum ÷ number of the values that are not empty, of the recordings with low ≤ condition ≤ high",
+        definition="The mean of a per-recording measure over some of the recordings of a slice: those whose condition "
+                   "is from low to high, both included, or those whose file name matches one of the names given.",
+        formula="sum ÷ number of the values that are not empty, of the recordings with low ≤ condition ≤ high, or of "
+                "the recordings whose file name matches",
         method="The condition of a recording is the first number in its file name when every stimulated recording is "
-               "measured (200 for ``200uA.tif``), and the value typed in its row in a list of recordings. A "
-               "recording without a condition is left out.",
-        empty="No recording in the range has a value.",
-        meaning="An average over the conditions where the measure is comparable, for example the currents that give "
-                "clear but not saturated responses.",
-        caveats="Which recordings fall in the range depends on the currents recorded in each slice; slices recorded "
-                "at different currents average different things.",
+               "measured (200 for ``200uA.tif``), and the value typed in its row in a list of recordings; a "
+               "recording without a condition is never in a range. File names are compared with or without ``.tif`` "
+               "and upper and lower case alike; ``*`` in a name stands for any characters and ``?`` for one, so "
+               "``hi*`` matches ``hi1.tif`` to ``hi4.tif``. The name of the mean is its range (``100-400``) or its "
+               "file names (``hi``) until it is given another.",
+        empty="No recording it takes has a value.",
+        meaning="An average over the recordings where the measure is comparable, for example the currents that give "
+                "clear but not saturated responses, or the repeats of the same stimulation.",
+        caveats="Which recordings it takes depends on what was recorded in each slice; slices recorded at different "
+                "currents, or with a different number of repeats, average different things.",
         example="Recordings at 50, 100, 200, 300, 400 and 500 µA with the range 100 to 400: the mean of the "
-                "recordings at 100, 200, 300 and 400 µA.",
+                "recordings at 100, 200, 300 and 400 µA. Recordings hi1.tif to hi4.tif with the name hi*: the mean "
+                "of the four.",
     ),
     dict(
         key="baseline spread",

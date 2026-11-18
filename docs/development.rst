@@ -51,8 +51,9 @@ this). The windows live in packages named after the tool on the start window
    │   │   ├── presets.py       the built-in protocols, as code, and the protocol library
    │   │   ├── built_in/        … the built-in protocols as the files EMA ships
    │   │   ├── analysis.py      running a protocol on the folders of an ROI file
+   │   │   ├── exclusions.py    which slices the protocol's exclusions leave out of the tables, and why
    │   │   └── workbook.py      the two Excel files, laid out for Prism
-   │   ├── spontaneous/         spontaneous events: the detector and measuring
+   │   ├── spontaneous/        spontaneous events: the detector and measuring
    │   │   ├── settings.py      every setting of the detector: default, label, help text
    │   │   ├── catalogue.py     the event, recording and slice measures, one line each
    │   │   ├── measure_details.py  the full description of every measure, for the measure reference
@@ -140,6 +141,10 @@ Building this documentation
 
 The first four commands redraw the figures and screenshots from the sample
 recordings (pass their folder as an argument if it is not found);
+``python docs/make_detector_animation.py <recording.tif>`` redraws the
+animation of *How the detector works* from a busy unstimulated recording,
+which is not among the samples (it was ``no15.tif`` of a slice after 4-AP
+wash-on);
 ``make_screenshots.py`` also writes the example Excel files in
 ``docs/examples``, which the pages on the Excel files show and offer for
 download. They are only needed after a change to the measuring or to the

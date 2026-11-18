@@ -42,7 +42,7 @@
     "bleach_order": 4,
     "despike_frames": 3,
     "echo_rule": true,
-    "echo_ms": 533.0,
+    "echo_ms": 550.0,
     "echo_um": 256.0,
     "echo_ratio": 1.0
   },

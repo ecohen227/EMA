@@ -32,13 +32,15 @@ from ..user_settings import remember, remembered
 from ..widgets import ERROR_COLOUR, OK_COLOUR, WARNING_COLOUR, LibraryBar, coloured, hint
 from .editors import PulsesEditor, RecordingsEditor
 from .example import ExampleFolder
+from .exclusions_editor import ExclusionsEditor
 from .measure_editors import ComparisonsEditor, KineticsEditor, SpatialEditor
 from .plot import TracePlot
 from .spatial_plot import SpatialView
 from .template_dialog import TemplateDialog
 from .widgets import Units
 
-TABS = ("1  Recordings", "2  Pulses and windows", "3  Kinetics", "4  Spatial", "5  Comparisons and summary")
+TABS = ("1  Recordings", "2  Pulses and windows", "3  Kinetics", "4  Spatial", "5  Comparisons and summary",
+        "6  Exclusions")
 SPATIAL_TAB = 3
 
 
@@ -78,9 +80,10 @@ class ConfiguratorWindow(QMainWindow):
                                             "recovery pulse.")
 
         self.editors = [RecordingsEditor(self.units), PulsesEditor(self.units), KineticsEditor(self.units),
-                        SpatialEditor(self.units), ComparisonsEditor(self.units)]
+                        SpatialEditor(self.units), ComparisonsEditor(self.units), ExclusionsEditor(self.units)]
         self.tabs = QTabWidget()
         self.tabs.setUsesScrollButtons(False)
+        self.tabs.setElideMode(Qt.ElideRight)  # every tab stays in sight; their names shorten when the side is narrow
         for editor, title in zip(self.editors, TABS):
             self.tabs.addTab(editor, title)
             editor.changed.connect(self.protocol_changed)
@@ -151,7 +154,7 @@ class ConfiguratorWindow(QMainWindow):
         splitter.addWidget(left)
         splitter.addWidget(right)
         splitter.setStretchFactor(1, 1)
-        splitter.setSizes([620, 800])
+        splitter.setSizes([740, 710])  # wide enough for the names of all six tabs
         main = QWidget()
         layout = QVBoxLayout(main)
         layout.addWidget(self.bar)

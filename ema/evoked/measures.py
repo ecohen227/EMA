@@ -76,7 +76,7 @@ def measure(protocol, trace, recording=None):
         else:
             peak = np.nan
         responses[pulse.name] = response(protocol, peak, baseline)
-        result.values[pulse.name] = peak
+        result.values[f"{pulse.name} peak"] = peak
         result.values[f"{pulse.name} response"] = responses[pulse.name]
 
     if protocol.kinetic_measures:
@@ -178,14 +178,16 @@ def fit_decay(protocol, fit, trace, recording=None):
 # ---------------------------------------------------------------------------
 
 
-def summarise(protocol, rows):
+def summarise(protocol, rows, files=None):
     """The slice measures from the per-recording values of its recordings.
 
     `rows` is a list of (condition, values) with one entry per recording, as
-    made by `measure`. The result maps each slice measure to its value.
+    made by `measure`, and `files` their file names (for the means over the
+    recordings chosen by name). The result maps each slice measure to its value.
     """
-    names = [m.name for m in protocol.measures() if m.per == "recording"]
+    names = [m.name for m in protocol.recording_measures()]  # the peaks too, written or not
     conditions = [condition for condition, _ in rows]
+    files = files or [""] * len(rows)
     summary = {}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
@@ -193,10 +195,9 @@ def summarise(protocol, rows):
             values = [row.get(name, np.nan) for _, row in rows]
             for statistic in protocol.summary_statistics:
                 summary[f"{name} {statistic}"] = {"min": np.nanmin, "max": np.nanmax, "mean": np.nanmean}[statistic](values)
-            if protocol.summary_condition_range:
-                low, high = protocol.summary_condition_range
-                inside = [v for v, c in zip(values, conditions) if c is not None and low <= c <= high]
-                summary[f"{name} mean {low:g}-{high:g}"] = np.nanmean(inside) if inside else np.nan
+            for mean in protocol.summary_means:
+                inside = [v for v, c, f in zip(values, conditions, files) if mean.includes(f, c)]
+                summary[f"{name} mean {mean.name}"] = np.nanmean(inside) if inside else np.nan
         if protocol.summary_baseline_spread:
             for name in protocol.baselines:
                 values = [row.get(name, np.nan) for _, row in rows]

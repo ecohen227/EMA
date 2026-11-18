@@ -232,6 +232,7 @@
     }
   ],
   "fits": [],
+  "write_peaks": false,
   "kinetics": {
     "measures": [],
     "pulses": null,
@@ -259,9 +260,11 @@
     }
   },
   "slice_summary": {
+    "file": true,
     "statistics": [],
-    "condition_range": null,
+    "means": [],
     "baseline_spread": false,
     "condition_fits": []
-  }
+  },
+  "exclusions": []
 }

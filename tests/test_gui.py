@@ -353,3 +353,34 @@ def test_launcher_offers_every_package_in_order(app):
     packages = [b.accessibleName() for b in launcher.findChildren(QPushButton) if b.accessibleName()]
     assert packages == [f"{step}  {name}" for _, _, group in WORKFLOWS for step, (name, _, _) in enumerate(group, start=1)]
     assert len(packages) == len(PACKAGES) == 5
+
+
+def test_without_a_card_for_each_recording_only_the_mean_recording_is_read(app, recordings, tmp_path):
+    from ema.roi_selection.window import KEPT_MEAN_ONLY, KEPT_WITH_CARDS
+
+    user_settings.remember(roi_show_each_recording=False)
+    window = RoiSelectionWindow(Selections(recordings), tmp_path)
+    window.show()
+    window.folder_list.setCurrentRow(1)
+    assert window.strip.isHidden() and not window.cards_to_fill and window.load.size == KEPT_MEAN_ONLY
+    read = {path.name for path in [*window.load._stacks, *window.load._reading]}
+    assert "no1.tif" not in read  # not one of the recordings the mean is made of
+    window.choose_recording("no1.tif")  # but it can still be shown
+    assert window.recording == "no1.tif" and window.stack is not None
+
+    window.cards_box.setChecked(True)
+    window.finish_strip()
+    assert window.strip.isVisible() and window.load.size == KEPT_WITH_CARDS
+    assert all(card.picture is not None for card in window.strip.cards.values())
+    assert user_settings.remembered("roi_show_each_recording") is True
+    window.close()
+
+
+def test_closing_while_the_strip_is_filled_stops_it(app, recordings, tmp_path):
+    window = RoiSelectionWindow(Selections(recordings), tmp_path)
+    window.show()
+    window.folder_list.setCurrentRow(1)
+    assert window.cards_to_fill
+    window.close()
+    assert not window.cards_to_fill and not window.strip_timer.isActive()
+    window.fill_next_card()  # a timer event already on its way does nothing

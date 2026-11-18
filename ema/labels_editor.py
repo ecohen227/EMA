@@ -81,7 +81,7 @@ class LabelsEditor(QWidget):
             ("Value of the selected label", "Another value of the selected label.", self.add_value),
         ])
         more = _menu_button("More", [
-            ("Restore the defaults", "Line, genotype, treatment, duration, sex, animal and slice, as in the lab's folders.", self.restore_defaults),
+            ("Restore the defaults", "Line, genotype, treatment, treatment time, sex, animal and slice, as in the lab's folders.", self.restore_defaults),
             ("Import…", "Use the labels of a labels file or of another analysis.", self.import_labels),
             ("Export…", "Save these labels in a file, for example to share them.", self.export_labels),
         ])

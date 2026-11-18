@@ -119,7 +119,9 @@ same output folder measures only what it has to:
        folders of several ROI files in one analysis; drop them when they are
        the same recordings in another place (another computer, a moved
        folder), so they are not in the tables twice.
-   * - The labels or the groups changed
+   * - The labels or the groups changed, or what the protocol says only
+       about the tables: its exclusions, whether the peaks or the per-slice
+       file are written
      - Nothing is measured; press **Rewrite the tables**, or run.
    * - The protocol changed (any setting), or a new version of EMA
        computes the results differently

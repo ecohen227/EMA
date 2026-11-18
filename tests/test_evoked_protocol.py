@@ -10,6 +10,8 @@ from ema.evoked.presets import LIBRARY
 from ema.evoked.presets import paired_pulse, paired_pulse_uncorrected, pulse_train
 from ema.evoked.protocol import (
     AS_LISTED,
+    BY_CONDITION,
+    BY_FILES,
     EVERY,
     LISTED,
     NO_PARTNER,
@@ -18,6 +20,7 @@ from ema.evoked.protocol import (
     Protocol,
     ProtocolError,
     Recording,
+    SliceMean,
     Window,
 )
 from ema.evoked.traces import find_partner, make_trace
@@ -68,7 +71,9 @@ def test_other_files_are_refused(tmp_path):
         (lambda p: setattr(p, "partner", AS_LISTED), "need a list of recordings"),
         (lambda p: setattr(p.comparisons[0], "pulse", "P7"), "P7, which is not a pulse"),
         (lambda p: setattr(p.fits[0], "length", 2), "at least 3 frames"),
-        (lambda p: setattr(p, "summary_condition_range", [400, 100]), "from low to high"),
+        (lambda p: setattr(p.summary_means[0], "low", 500), "from low to high"),
+        (lambda p: setattr(p.summary_means[0], "name", ""), "a name of its own"),
+        (lambda p: p.summary_means.append(SliceMean("hi", BY_FILES)), "at least one file name"),
         (lambda p: p.pulses.clear(), "at least one pulse"),
     ],
 )
@@ -143,6 +148,16 @@ def test_measures_follow_the_settings():
     names = [m.name for m in protocol.measures()]
     assert "P1 half-width" in names and "P1 half-width mean 100-400" in names and "B2 spread" in names
     assert names.index("P2 response") < names.index("PPR") < names.index("Tau") < names.index("B1 min")
+    assert "P1 peak" not in names and "P1" not in names  # the peaks are not written unless chosen
+    protocol.write_peaks = True
+    names = [m.name for m in protocol.measures()]
+    assert names[names.index("P1 response") - 1] == "P1 peak" and "P1 peak mean 100-400" in names
+
+
+def test_protocols_saved_before_the_peak_switch_keep_their_peaks():
+    data = paired_pulse().to_dict()
+    del data["write_peaks"]
+    assert Protocol.from_dict(data).write_peaks
 
 
 def test_every_mode_skips_unstimulated_red_and_test(tmp_path):
@@ -249,6 +264,17 @@ def test_fits_across_conditions_survive_a_file(tmp_path):
     assert any("P1 width, which is not measured per recording" in p for p in protocol.problems())
 
 
+def test_a_fit_across_conditions_of_a_peak_saved_under_the_pulse_name_still_loads():
+    from ema.evoked.protocol import SATURATION, ConditionFit
+
+    saved = paired_pulse()
+    saved.condition_fits = [ConditionFit("IO", "P1 peak", SATURATION)]
+    data = saved.to_dict()
+    data["slice_summary"]["condition_fits"][0]["measure"] = "P1"
+    loaded = Protocol.from_dict(data)
+    assert loaded.condition_fits[0].measure == "P1 peak" and not loaded.problems()
+
+
 def test_every_measure_is_described_in_full():
     from ema.evoked.measure_details import BASIC, KINETIC_DETAILS, NEAR_TO_FAR_DETAILS, SLICE, SPATIAL_DETAILS
     from ema.evoked.catalogue import KINETIC_KEYS, SPATIAL_KEYS
@@ -261,7 +287,41 @@ def test_every_measure_is_described_in_full():
     # every kind of measure a protocol produces besides the catalogue, each with a worked example
     kinds = {"baseline", "peak", "response brightness", "response ratio", "comparison", "single fit", "double fit"}
     assert {entry["key"] for entry in BASIC} == kinds
-    assert {entry["key"] for entry in SLICE} == {"statistics", "range mean", "baseline spread", "recovery fit", "saturation fit"}
+    assert {entry["key"] for entry in SLICE} == {"statistics", "recordings mean", "baseline spread", "recovery fit", "saturation fit"}
     for entry in BASIC + SLICE:
         assert required | {"key", "title", "name", "unit", "definition", "example"} == set(entry)
         assert all(text.strip() for text in entry.values())
+
+
+def test_a_mean_over_recordings_takes_a_condition_range_or_file_names():
+    from ema.evoked.protocol import file_patterns
+
+    hi = SliceMean("hi", BY_FILES, files=["hi*"])
+    assert hi.includes("hi1.tif", None) and hi.includes("HI4.TIF", None) and not hi.includes("no1.tif", None)
+    listed = SliceMean("", BY_FILES, files=file_patterns("hi1, hi3.tif,, "))
+    assert listed.files == ["hi1", "hi3.tif"]
+    assert [listed.includes(f, None) for f in ("hi1.tif", "hi2.tif", "hi3.tif", "hi10.tif")] == [True, False, True, False]
+    assert SliceMean("", BY_FILES, files=["hi[1-4]"]).includes("hi4.tif", None)
+    assert (hi.automatic_name(), listed.automatic_name()) == ("hi", "hi1+hi3")
+    in_range = SliceMean("100-400", BY_CONDITION, 100.0, 400.0)
+    assert in_range.automatic_name() == "100-400"
+    assert in_range.includes("hi1.tif", 400.0) and not in_range.includes("50uA.tif", 50.0) and not in_range.includes("hi1.tif", None)
+
+
+def test_means_over_recordings_are_saved_and_give_their_own_columns():
+    protocol = paired_pulse()
+    protocol.summary_means.append(SliceMean("hi", BY_FILES, files=["hi*"]))
+    loaded = Protocol.from_dict(json.loads(json.dumps(protocol.to_dict())))
+    assert loaded.summary_means == protocol.summary_means and not loaded.problems()
+    columns = {m.name: m for m in loaded.measures() if m.per == "slice"}
+    assert "P1 response mean 100-400" in columns and "P1 response mean hi" in columns
+    assert columns["P1 response mean hi"].explanation.endswith("whose file name matches hi*.")
+
+
+def test_a_protocol_saved_with_a_condition_range_has_that_mean():
+    data = paired_pulse().to_dict()
+    del data["slice_summary"]["means"]
+    data["slice_summary"]["condition_range"] = [50, 300]
+    assert Protocol.from_dict(data).summary_means == [SliceMean("50-300", BY_CONDITION, 50.0, 300.0)]
+    data["slice_summary"]["condition_range"] = None
+    assert Protocol.from_dict(data).summary_means == []

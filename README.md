@@ -38,7 +38,8 @@ python -m ema
 ## Documentation
 
 The documentation explains every package step by step, with figures. Press *Documentation* in the start window,
-or open `docs/_build/html/index.html`. Start with *Getting started* and *What EMA expects from your recordings*.
+or open `docs/_build/html/index.html`. Start with *Quick start*: your first analysis with the defaults, nothing to
+configure.
 
 If the `docs/_build` folder is missing, build the documentation once:
 

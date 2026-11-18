@@ -15,7 +15,7 @@ from openpyxl.styles import Font
 
 BOLD = Font(bold=True)
 GREY = Font(color="808080", italic=True)
-RESERVED = {"events", "recordings", "slices", "notes", "about"}
+RESERVED = {"events", "recordings", "slices", "notes", "about", "exclusions"}
 
 
 class TablesLocked(OSError):

@@ -1,5 +1,77 @@
 # Changelog
 
+## 3.0.0a8 — 2026-11-17: exclusions
+
+### Changed for users
+
+- Evoked: each pulse's peak (`P1 peak`) is written only when *Write the peak of each pulse too* is ticked (tab
+  *Pulses and windows*); its response always is. Off in the built-in protocols and in new ones; protocol files saved
+  without the entry (`write_peaks`) keep writing the peaks. The peaks are still measured and summarised, so fits
+  across conditions and exclusions can use them, and ticking or unticking measures nothing again.
+
+### Fixed
+
+- ROI Selection crashed with `CancelledError` (seen on a Mac) when the window was closed while the strip was still
+  being filled: closing cancelled the recordings waiting to be read ahead, and the next card then asked for one of
+  them. Closing now stops the strip, and `RecordingCache` reads a recording itself when its read-ahead was cancelled,
+  and keeps nothing after `stop()`. A card or recording that runs out of memory says so instead of stopping the
+  window.
+
+### New
+
+- ROI Selection: *Each recording* (next to *Show*) hides the strip of cards. Only the recordings the mean recording is
+  made of are then read and kept (8 instead of 24 in memory), which is faster and needs far less memory; any
+  recording can still be shown from the *Recording* list. EMA remembers the choice (`roi_show_each_recording`).
+- Evoked Analysis Configurator: a sixth tab, *Exclusions*, leaves slices out of both tables. Each exclusion makes one
+  value per slice from one per-recording measure over its recordings (all, a condition range, or file names such as
+  `hi*`): its spread ((largest − smallest) ÷ largest or ÷ smallest × 100), range, coefficient of variation, mean,
+  median, smallest or largest value. A slice is left out when that value is outside Q1 − k·IQR to Q3 + k·IQR of the
+  slices (k = 1.5 by default), more than k standard deviations from their mean, or above or below a fixed limit;
+  either side or one side only, among all slices or the slices of its group. *Try them* lists what the exclusions
+  would do to the results of an earlier analysis. The left-out slices are in neither Excel file; both get an
+  *Exclusions* sheet with every slice's value and limits, the Notes say why each slice was left out, and About lists
+  the exclusions. Exclusions are applied when the tables are written (`ema/evoked/exclusions.py`), so changing them
+  measures nothing again. Protocol files keep them in `exclusions`.
+- Evoked Analysis: *Rewrite the tables* uses the protocol chosen in the window, read again from its file, when it
+  measures what the kept results were measured with, so changes that only affect the tables (exclusions, the peaks,
+  the per-slice file) are written without running the analysis.
+
+## 3.0.0a7 — 2026-11-16: the detector explained
+
+### Changed for users
+
+- Evoked: a pulse's peak is named `<pulse> peak` (`P1 peak`, sheet *P1 peak*) instead of the pulse's own name, so
+  that it is not mistaken for its response (`P1 response`); both are in % with a stimulated ÷ unstimulated trace.
+  Results kept in an output folder are measured again once (`RESULTS_VERSION` 2); a fit across conditions saved
+  with a peak under the pulse's name is read as `<pulse> peak`.
+- The Standard detector's *Close in time within* (echoes) is 550 ms instead of 533 ms (110 frames converted to
+  ms). On the 151 unstimulated recordings checked, every event and control count is unchanged. Detector files
+  saved with 533 ms keep it; results searched with the Standard detector are searched again once, after EMA asks.
+
+### New
+
+- Evoked: the slice summary's *Mean over recordings* is now a list: *Add mean over recordings* adds a mean over the
+  recordings with a condition in a range (as before, 100 to 400 µA) or over the recordings named like the file
+  names typed, such as `hi*` for `hi1.tif` to `hi4.tif` or `hi1, hi2` (`*` any characters, `?` one; with or
+  without `.tif`, upper and lower case alike). Each has a name, which ends its columns (`P1 response mean hi`) and
+  follows its range or file names until another is typed. In a protocol that lists its recordings, the first mean
+  added takes them by name. Protocol files keep them in `slice_summary.means`; a file with
+  `slice_summary.condition_range` still loads, with that one mean, and the results kept from it are not measured
+  again for it (`_measuring` compares protocols as this EMA writes them). `summarise` takes the file names.
+
+### Documentation
+
+- The folder labels are listed as line, genotype, treatment, treatment time, sex, animal and slice on the
+  *Recordings* and *Labels* pages and in the *Restore the defaults* tooltip, which still said "duration".
+- *How the detector works* is rewritten step by step: each step in words, then as a formula (the event shape and
+  its best straight line, the matched filter, the pooling, the strength, regions, echoes, the searched time),
+  with a figure for each step in place of one combined figure, and an animation of the detector on a slice in 4-AP
+  (`docs/make_detector_animation.py`). The docs now render formulas (`sphinx.ext.mathjax`; the formulas need an
+  internet connection to show).
+- New page *Quick start*: both analyses with the built-in protocols and the Standard detector, without
+  configuring anything, with a picture of each window whose fields are marked with red letters
+  (`save_marked` in `docs/make_screenshots.py`). The start page, *Getting started* and the README point to it.
+
 ## 3.0.0a6 — 2026-11-16: after the first beta test
 
 ### Fixed

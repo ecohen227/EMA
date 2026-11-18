@@ -194,6 +194,11 @@ recordings out. The mean recording cannot be flagged.
 
    A flagged recording. The slider has been moved past the peak.
 
+Untick **Each recording** (next to *Show*, at the top) to hide the strip.
+Then only the recordings the mean recording is made of are read, which is
+faster and needs much less memory; any recording can still be shown by
+choosing it in the *Recording* list. EMA remembers the choice.
+
 The cards are filled one after another while the recordings are read, so
 the window can be used straight away.
 

@@ -20,8 +20,9 @@ os.environ["QT_SCALE_FACTOR"] = "1.5"
 import numpy as np
 import tifffile
 from matplotlib.backend_bases import MouseEvent
-from PyQt5.QtGui import QFont
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QPoint, QRect, Qt
+from PyQt5.QtGui import QColor, QFont, QPainter, QPen
+from PyQt5.QtWidgets import QApplication, QPushButton
 
 app = QApplication([])
 app.setFont(QFont("Segoe UI", 9))
@@ -56,6 +57,43 @@ def save(widget, name):
     print("saved", name)
 
 
+MARK = QColor("#d62728")
+
+
+def save_marked(window, name, marks):
+    """Save a screenshot for the quick start: each of `marks`, (letter, widget or (widget, rectangle in it)), is framed
+    in red with its letter on the frame's corner. Letters, because the windows number their own steps."""
+    app.processEvents()
+    app.processEvents()
+    picture = window.grab()
+    painter = QPainter(picture)
+    painter.setRenderHint(QPainter.Antialiasing)
+    font = QFont(painter.font())
+    font.setBold(True)
+    font.setPixelSize(15)
+    painter.setFont(font)
+    for number, target in marks:
+        widget, rect = target if isinstance(target, tuple) else (target, target.rect())
+        frame = QRect(widget.mapTo(window, rect.topLeft()), rect.size()).adjusted(-3, -3, 3, 3)
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(MARK, 3))
+        painter.drawRoundedRect(frame, 4, 4)
+        corner = QPoint(max(frame.left(), 13), max(frame.top(), 13))
+        painter.setPen(QPen(Qt.white, 2))
+        painter.setBrush(MARK)
+        painter.drawEllipse(corner, 12, 12)
+        painter.setPen(Qt.white)
+        painter.drawText(QRect(corner.x() - 12, corner.y() - 12, 24, 24), Qt.AlignCenter, str(number))
+    painter.end()
+    picture.save(str(SCREENSHOTS / name))
+    print("saved", name)
+
+
+def button(window, text):
+    """The button with this text (on the start window: this package name, after its number)."""
+    return next(b for b in window.findChildren(QPushButton) if text in (b.text(), b.accessibleName().split("  ")[-1]))
+
+
 def mouse(view, kind, x, y, button=1):
     """Send a mouse event at image position (x, y)."""
     px, py = view.axes.transData.transform((x, y))
@@ -71,6 +109,9 @@ def main():
     launcher = Launcher()
     launcher.show()
     save(launcher, "launcher.png")
+    save_marked(launcher, "quick_launcher.png", [("A", button(launcher, "ROI Selection")),
+                                                  ("B", button(launcher, "Evoked Analysis")),
+                                                  ("C", button(launcher, "Spontaneous Event Analysis"))])
 
     dialog = SetupDialog()
     dialog.recordings.path.setText(str(recordings))
@@ -81,6 +122,10 @@ def main():
     dialog.filter.skip_with.setText("4ap, wash")
     dialog.show()
     save(dialog, "setup.png")
+    dialog.filter.skip_with.setText("")  # the quick start leaves the folder filter alone
+    save_marked(dialog, "quick_roi_setup.png", [("A", dialog.recordings), ("B", dialog.form), ("C", dialog.output),
+                                                ("D", button(dialog, "Start"))])
+    dialog.filter.skip_with.setText("4ap, wash")
     dialog.preview.view_box.setCurrentIndex(1)
     dialog.form.sections["Electrode"].heading.click()
     dialog.form.inputs["electrode_threshold"].setValue(0.97)
@@ -94,6 +139,7 @@ def main():
     window.folder_list.setCurrentRow(1)
     window.finish_strip()
     save(window, "window.png")
+    save_marked(window, "quick_roi_window.png", [("A", window.image), ("B", window.strip), ("C", window.accept_button)])
 
     x, y = window.selection.roi_center
     window.move_roi(x + 14, y - 12)
@@ -127,6 +173,7 @@ def main():
     save(window, "reviewed.png")
     configurator_screenshots(recordings, output)
     analysis_screenshots(output)
+    exclusions_screenshot(recordings, output)
     spontaneous_screenshots(recordings, output)
     spontaneous_analysis_screenshots(recordings, output)
 
@@ -172,12 +219,31 @@ def configurator_screenshots(recordings, output):
     save(dialog, "configurator_place_pulses.png")
     dialog.close()
 
+    window.editors[4].add_mean()
     window.editors[4].add_condition_fit()
     window.tabs.setCurrentIndex(4)
     app.processEvents()
     bar = window.editors[4].verticalScrollBar()
     bar.setValue(bar.maximum())  # down to the fits across conditions
     save(window, "configurator_summary.png")
+    window.bar.saved = window.protocol.to_dict()
+    window.close()
+
+
+def exclusions_screenshot(recordings, output):
+    """The Exclusions tab with the spread of B1, tried on the results of the demo study (after analysis_screenshots)."""
+    window = ConfiguratorWindow(user_folder=output / "protocols")
+    window.resize(1450, 820)
+    window.use_example_folder(recordings / "2P_input_output", None)
+    window.show()
+    editor = window.editors[5]
+    editor.add_exclusion()
+    window.protocol.exclusions[0].side = "high"
+    window.protocol_changed(True)
+    editor.use_results(output / "demo" / "Evoked 2P")
+    window.tabs.setCurrentIndex(5)
+    app.processEvents()
+    save(window, "configurator_exclusions.png")
     window.bar.saved = window.protocol.to_dict()
     window.close()
 
@@ -248,6 +314,9 @@ def analysis_screenshots(output):
     window.filter.only_with.setText("input output")
     window.show()
     save(window, "analysis.png")
+    save_marked(window, "quick_evoked.png", [("A", window.roi_input), ("B", window.filter.only_with), ("C", window.method_box),
+                                             ("D", window.output), ("E", (window.tabs.tabBar(), window.tabs.tabBar().tabRect(0))),
+                                             ("F", window.run_button)])
     window.tabs.setCurrentIndex(2)
     save(window, "analysis_near_misses.png")
     window.near_misses.apply(window.near_misses.misses[0], ("Treatment", "CTRL"))
@@ -261,6 +330,7 @@ def analysis_screenshots(output):
     app.processEvents()
     shown_as(window.output, "C:/Users/you/EMA results/Evoked 2P")
     save(window, "analysis_done.png")
+    save_marked(window, "quick_evoked_done.png", [("A", window.status), ("B", window.open_button)])
     window.close()
     EXAMPLES.mkdir(exist_ok=True)
     for name in (PER_RECORDING, PER_SLICE):
@@ -327,6 +397,7 @@ def spontaneous_analysis_screenshots(recordings, output):
     window.load_roi_file()
     window.output.path.setText(str(output / "spontaneous_demo" / "Spontaneous"))
     window.output_changed()
+    window.filter.only_with.setText("input output")
     window.start()
     window.worker.wait()
     app.processEvents()
@@ -335,6 +406,9 @@ def spontaneous_analysis_screenshots(recordings, output):
     shown_as(window.output, "C:/Users/you/EMA results/Spontaneous")
     window.show()
     save(window, "spontaneous_analysis.png")
+    save_marked(window, "quick_spontaneous.png", [("A", window.recordings_input), ("B", window.roi_input),
+                                                  ("C", window.filter.only_with), ("D", window.method_box), ("E", window.output),
+                                                  ("F", window.run_button)])
     window.close()
     EXAMPLES.mkdir(exist_ok=True)
     for name in (PER_EVENT, SPONTANEOUS_PER_SLICE):

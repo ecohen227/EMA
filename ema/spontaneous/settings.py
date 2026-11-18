@@ -109,7 +109,7 @@ class DetectorSettings(Settings):
     echo_rule: bool = setting(True, "Echoes", "Drop echoes", "Filtering makes a dip just before and after each event. Of two "
                               "regions of opposite sign close in time and place, only the stronger counts.", "bool",
                               advanced=True)
-    echo_ms: float = setting(533.0, "Echoes", "Close in time within", "Two regions are close in time when their onsets are at "
+    echo_ms: float = setting(550.0, "Echoes", "Close in time within", "Two regions are close in time when their onsets are at "
                              "most this far apart.", "float", "ms", advanced=True, minimum=0.0, maximum=10000.0, step=10.0)
     echo_um: float = setting(256.0, "Echoes", "Close in place within", "Two regions are close in place when their strongest "
                              "pixels are at most this far apart.", "float", "µm", advanced=True,

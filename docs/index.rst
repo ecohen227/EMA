@@ -9,9 +9,11 @@ It measures two things:
 * **spontaneous events**: brief, local release without a stimulus, found in
   the unstimulated recordings.
 
-EMA is five packages behind one start window. New to EMA? Read
-:doc:`getting_started` and :doc:`recordings` first. Words you do not know
-are explained in the :doc:`glossary`.
+EMA is five packages behind one start window. New to EMA? Install it with
+:doc:`getting_started`, then run your first analysis with the
+:doc:`quick_start`, which uses the defaults and needs no configuring.
+:doc:`recordings` says how your recordings should be named and arranged,
+and words you do not know are explained in the :doc:`glossary`.
 
 Workflow
 --------
@@ -52,6 +54,7 @@ The start window lists the packages in the order you use them.
    :caption: Using EMA
 
    getting_started
+   quick_start
    recordings
    roi_selection/index
    evoked_configurator/index

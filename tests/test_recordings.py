@@ -1,3 +1,5 @@
+import threading
+
 import numpy as np
 import pytest
 import tifffile
@@ -36,6 +38,36 @@ def test_the_recording_cache_reads_each_recording_once(io_folder):
     assert reads.count(first.name) == 2
     with pytest.raises(OSError):
         cache(io_folder / "missing.tif")
+    cache.stop()
+
+
+def test_a_recording_dropped_by_stop_is_read_when_wanted(io_folder):
+    """Closing ROI Selection stops the cache while a card may still ask for a recording that was waiting to be read
+    ahead: it is then read, not lost with a CancelledError (seen on a Mac)."""
+    started, release = threading.Event(), threading.Event()
+
+    def slow(path):
+        started.set()
+        release.wait(5)
+        return load_stack(path)
+
+    cache = RecordingCache(4, load=slow)
+    first, second = list_recordings(io_folder)[:2]
+    cache.read_ahead([first, second])  # first is being read, second waits
+    started.wait(5)
+    cache.stop()
+    release.set()
+    assert np.array_equal(cache(second), load_stack(second))
+    cache.read_ahead([first])  # nothing is read ahead after a stop
+    assert not cache._stacks and not cache._reading
+
+
+def test_the_recording_cache_can_keep_fewer(io_folder):
+    cache = RecordingCache(3)
+    for path in list_recordings(io_folder)[:3]:
+        cache(path)
+    cache.resize(1)
+    assert list(cache._stacks) == [list_recordings(io_folder)[2]]
     cache.stop()
 
 

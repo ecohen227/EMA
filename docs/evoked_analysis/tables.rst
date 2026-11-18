@@ -36,11 +36,21 @@ What is in each file
      - The same numbers laid out to paste into Prism (below). ``/`` in a
        name becomes ``÷`` (``P2÷P1``).
    * - **Notes**
-     - What was not measured and why, and labels to check.
+     - What was not measured and why, labels to check, and why a slice was
+       left out.
+   * - **Exclusions** (when the protocol has exclusions)
+     - Each exclusion in words, then one row per slice and exclusion: its
+       group, its value, the lowest and highest value kept, and whether it
+       is left out (*yes*, *no*, or *not tested* when its value or the limits
+       could not be worked out). A slice left out by any exclusion is in
+       neither file.
    * - **About**
-     - The protocol, the labels, and what every measure is.
+     - The protocol, the labels, the exclusions, and what every measure is.
 
-A value that could not be measured is an **empty cell**, never 0.
+A value that could not be measured is an **empty cell**, never 0. Each
+pulse's peak (``P1 peak``) is written only when the protocol says so
+(*Write the peak of each pulse too*, on the *Pulses and windows* tab); its
+response always is.
 
 The start of the *Recordings* sheet of the example (some of its columns):
 

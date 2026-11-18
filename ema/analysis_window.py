@@ -211,7 +211,9 @@ class AnalysisWindow(QMainWindow):
         self.cancel_button.clicked.connect(self.cancel)
         self.cancel_button.hide()
         self.write_button = QPushButton("Rewrite the tables")
-        self.write_button.setToolTip(f"Write {tables} again with the labels and groups shown now. Nothing is measured.")
+        self.write_button.setToolTip(f"Write {tables} again with the labels and groups shown now, and with what the "
+                                     f"{noun} chosen above says about the tables (if it measures the same). "
+                                     "Nothing is measured.")
         self.write_button.clicked.connect(lambda: self.write_tables())
         self.open_button = QPushButton("Open the output folder")
         self.open_button.clicked.connect(self.open_output)
@@ -726,6 +728,8 @@ class AnalysisWindow(QMainWindow):
     def write_tables(self, quiet=False):
         if not self.analysis.folders or self.analysis.method is None:
             return False
+        if not quiet:
+            self.take_table_settings()
         try:
             self.analysis.save()
             self.kind.write(self.analysis)
@@ -738,6 +742,13 @@ class AnalysisWindow(QMainWindow):
         self.set_outdated(False)
         self.status.setText((self.status.text() + "\n" if quiet else "") + "Tables written.")
         return True
+
+    def take_table_settings(self):
+        """Use the chosen protocol or detector for the tables when it measures what the kept results were measured
+        with, so that rewriting the tables follows what changes only them, such as a protocol's exclusions."""
+        self.choose_method()  # read it again: it may have been changed and saved since it was chosen
+        if self.method is not None and self.analysis.is_current(self.method):
+            self.analysis.measuring_with(self.method)
 
     def open_output(self):
         folder = self.output.folder()

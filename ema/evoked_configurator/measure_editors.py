@@ -5,12 +5,27 @@ ema/evoked/metrics.py, so a measure added there appears here by itself.
 """
 
 from dataclasses import fields
+from os.path import commonprefix
+from pathlib import Path
 
-from PyQt5.QtWidgets import QCheckBox, QDoubleSpinBox, QGridLayout, QLabel, QPushButton, QSpinBox, QWidget
+from PyQt5.QtWidgets import (
+    QCheckBox,
+    QDoubleSpinBox,
+    QGridLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QWidget,
+)
 
 from ..evoked.catalogue import KINETIC, SPATIAL, SpatialSettings
 from ..evoked.protocol import (
+    BY_CONDITION,
+    BY_FILES,
     DOUBLE,
+    LISTED,
     PERCENT_SCALE,
     RATIO_SCALE,
     RECOVERY,
@@ -20,6 +35,8 @@ from ..evoked.protocol import (
     Comparison,
     ConditionFit,
     Fit,
+    SliceMean,
+    file_patterns,
 )
 from .editors import Editor
 from .widgets import FrameBox, Rows, check_box, choice_box, name_box, remove_button, row_of
@@ -273,13 +290,12 @@ class ComparisonsEditor(Editor):
                  explanation="The response of one pulse divided by the response of another, e.g. P2 ÷ P1, the paired-pulse ratio.")
 
         self.statistics = {name: check_box(False, lambda on, n=name: self._set_statistic(n, on), name) for name in STATISTICS}
-        self.in_range = check_box(False, self._set_range_on, "Mean over recordings with a condition from")
-        self.low, self.high = QDoubleSpinBox(), QDoubleSpinBox()
-        for box in (self.low, self.high):
-            box.setRange(-1e6, 1e6)
-            box.setDecimals(1)
-            box.setKeyboardTracking(False)
-            box.valueChanged.connect(self._set_range)
+        self.means = Rows(["Name", "Mean over the recordings", "", ""])
+        self.mean_names = {}  # id of a SliceMean -> its name box
+        add_mean = QPushButton("Add mean over recordings")
+        add_mean.setToolTip("A mean over the recordings with a condition in a range, such as 100 to 400 µA, or over "
+                            "the recordings with certain file names, such as hi1 to hi4.")
+        add_mean.clicked.connect(self.add_mean)
         self.spread = check_box(False, self._set_spread, "Baseline spread: how much each baseline varies between the recordings")
         self.slice_file = check_box(True, self._set_slice_file, "Write Evoked per slice.xlsx")
         self.box("Per-slice file", self.slice_file,
@@ -287,9 +303,11 @@ class ComparisonsEditor(Editor):
                              "conditions below. Untick it when one row per recording is all you need.")
         self.slice_boxes = []
         self.slice_boxes.append(self.box("Slice summary", row_of("Over the recordings of a slice:", *self.statistics.values()),
-                 row_of(self.in_range, self.low, "to", self.high), self.spread,
+                 self.means, row_of(add_mean), self.spread,
                  explanation="One value per slice (per recording folder), combining its recordings, e.g. the mean dF/F "
-                             "over 100 to 400 µA. Every measure of the other tabs is summarised."))
+                             "over 100 to 400 µA, or over the recordings named hi* (hi1.tif to hi4.tif; * stands for "
+                             "any characters, and several names are separated by commas). Every measure of the other "
+                             "tabs is summarised."))
 
         self.condition_fits = Rows(["Name", "Measure", "Curve", "Plateau", ""])
         add_fit = QPushButton("Add fit across conditions")
@@ -316,18 +334,12 @@ class ComparisonsEditor(Editor):
                 remove_button(lambda _=False, c=comparison: self._remove(c), comparison.name),
             )
         self._fill_condition_fits()
-        widgets = [*self.statistics.values(), self.in_range, self.low, self.high, self.spread, self.slice_file]
+        self._fill_means()
+        widgets = [*self.statistics.values(), self.spread, self.slice_file]
         for widget in widgets:
             widget.blockSignals(True)
         for name, box in self.statistics.items():
             box.setChecked(name in p.summary_statistics)
-        self.in_range.setChecked(p.summary_condition_range is not None)
-        low, high = p.summary_condition_range or (100, 400)
-        for box, value in ((self.low, low), (self.high, high)):
-            box.setSuffix(f" {p.condition_unit}" if p.condition_unit else "")
-            box.setValue(value)
-        self.low.setEnabled(self.in_range.isChecked())
-        self.high.setEnabled(self.in_range.isChecked())
         self.spread.setChecked(p.summary_baseline_spread)
         self.slice_file.setChecked(p.slice_file)
         for box in self.slice_boxes:
@@ -379,16 +391,81 @@ class ComparisonsEditor(Editor):
         self.protocol.summary_statistics = [s for s in STATISTICS if (s == name and on) or (s != name and s in chosen)]
         self.changed.emit(True)
 
-    def _set_range_on(self, on):
-        self.protocol.summary_condition_range = [self.low.value(), self.high.value()] if on else None
-        self.low.setEnabled(on)
-        self.high.setEnabled(on)
+    def _fill_means(self):
+        p = self.protocol
+        kinds = [("with a condition from", BY_CONDITION), ("named", BY_FILES)]
+        self.means.clear()
+        self.mean_names = {}
+        for mean in p.summary_means:
+            name = name_box(mean.name, lambda new, m=mean: self._rename_mean(m, new))
+            self.mean_names[id(mean)] = name
+            if mean.by == BY_FILES:
+                which = QLineEdit(", ".join(mean.files))
+                which.setMinimumWidth(220)
+                which.setPlaceholderText("hi*   or   hi1, hi2, hi3, hi4")
+                which.setToolTip("The file names of the recordings to average, separated by commas, with or without "
+                                 ".tif. * stands for any characters and ? for one; upper and lower case alike.")
+                which.editingFinished.connect(lambda m=mean, w=which: self._set_mean(m, files=file_patterns(w.text())))
+            else:
+                low, high = QDoubleSpinBox(), QDoubleSpinBox()
+                for box, value in ((low, mean.low), (high, mean.high)):
+                    box.setRange(-1e6, 1e6)
+                    box.setDecimals(1)
+                    box.setKeyboardTracking(False)
+                    box.setSuffix(f" {p.condition_unit}" if p.condition_unit else "")
+                    box.setValue(value)
+                for box in (low, high):
+                    box.valueChanged.connect(lambda _=0, m=mean, a=low, b=high: self._set_mean(m, low=a.value(), high=b.value()))
+                which = row_of(low, "to", high)
+            self.means.add(name, choice_box(kinds, mean.by, lambda v, m=mean: self._set_mean(m, rebuild=True, by=v)), which,
+                           remove_button(lambda _=False, m=mean: self._remove_mean(m), f"the mean {mean.name}"))
+
+    def add_mean(self):
+        """A mean over the listed recordings by their name (hi* for hi1.tif to hi4.tif) when the protocol lists its
+        recordings; otherwise over a condition range, 100 to 400, or, when there is one already, by file name."""
+        p = self.protocol
+        if p.selection == LISTED:
+            prefix = commonprefix([Path(r.file).stem.lower() for r in p.recordings if r.file.strip()])
+            mean = SliceMean("", BY_FILES, files=[f"{prefix}*"] if prefix else [])
+        elif any(mean.by == BY_CONDITION for mean in p.summary_means):
+            mean = SliceMean("", BY_FILES)
+        else:
+            mean = SliceMean("", BY_CONDITION, 100.0, 400.0)
+        mean.name = self._free_mean(mean.automatic_name(), mean)
+        p.summary_means.append(mean)
         self.changed.emit(True)
 
-    def _set_range(self):
-        if self.protocol.summary_condition_range is not None:
-            self.protocol.summary_condition_range = [self.low.value(), self.high.value()]
-            self.changed.emit(True)
+    def _set_mean(self, mean, rebuild=False, **changes):
+        """Change a mean; one whose name was made from its recordings gets the name of its new recordings."""
+        automatic = mean.name == mean.automatic_name()
+        for attribute, value in changes.items():
+            setattr(mean, attribute, value)
+        if automatic:
+            mean.name = self._free_mean(mean.automatic_name(), mean)
+            if not rebuild:
+                self.mean_names[id(mean)].setText(mean.name)
+        self.changed.emit(rebuild)
+
+    def _rename_mean(self, mean, new):
+        if new == mean.name:
+            return
+        if not new or new in [m.name for m in self.protocol.summary_means if m is not mean]:
+            QMessageBox.information(self, "Name", f"'{new}' cannot be used: every mean needs a name of its own, not empty.")
+        else:
+            mean.name = new
+        self.changed.emit(True)
+
+    def _free_mean(self, name, owner):
+        """`name`, or `name 2`, `name 3`… if another mean has it already."""
+        taken = {m.name for m in self.protocol.summary_means if m is not owner}
+        candidate, number = name, 2
+        while name and candidate in taken:
+            candidate, number = f"{name} {number}", number + 1
+        return candidate
+
+    def _remove_mean(self, mean):
+        self.protocol.summary_means.remove(mean)
+        self.changed.emit(True)
 
     def _set_spread(self, on):
         self.protocol.summary_baseline_spread = on
@@ -402,8 +479,8 @@ class ComparisonsEditor(Editor):
 
     def _fill_condition_fits(self):
         p = self.protocol
-        measures = [(m.name, m.name) for m in p.measures() if m.per == "recording"]
-        units = {m.name: m.unit for m in p.measures()}
+        measures = [(m.name, m.name) for m in p.recording_measures()]  # the peaks too, written or not
+        units = {m.name: m.unit for m in p.recording_measures()}
         models = [("recovery", RECOVERY), ("saturation (input–output)", SATURATION)]
         self.condition_fits.clear()
         for fit in p.condition_fits:
@@ -433,7 +510,7 @@ class ComparisonsEditor(Editor):
         self.changed.emit(True)
 
     def _set_plateau_fixed(self, fit, on):
-        units = {m.name: m.unit for m in self.protocol.measures()}
+        units = {m.name: m.unit for m in self.protocol.recording_measures()}
         fit.plateau = _full_recovery(units.get(fit.measure)) if on else None
         self.changed.emit(True)
 

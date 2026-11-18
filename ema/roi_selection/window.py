@@ -27,6 +27,7 @@ from PyQt5.QtWidgets import (
 )
 
 from ..recordings import RecordingCache, list_recordings
+from ..user_settings import remember, remembered
 from .detection import baseline_image, detect, detection_files, folder_mean, peak_frame, response_at, roi_trace
 from .plots import EDIT_ELECTRODE, MOVE_ROI, ImageView, TraceView
 from .selections import AUTOMATIC, FILE_NAME, MANUAL, FolderSelection
@@ -34,6 +35,8 @@ from .setup_dialog import SetupDialog
 from .strip import FLAG, RecordingStrip
 
 MEAN = "mean"  # stands for the mean recording wherever a recording's file name is expected
+# How many recordings stay in memory: with a card for each recording, or with the mean recording only
+KEPT_WITH_CARDS, KEPT_MEAN_ONLY = 24, 8
 VIEW_RESPONSE = "Response (dF/F)"
 VIEW_MOVIE = "Brightness"
 VIEW_BASELINE = "Baseline image"
@@ -55,8 +58,10 @@ class RoiSelectionWindow(QMainWindow):
         self.folders = selections.recording_folders()
 
         # Recordings are large and slow to read, so the last ones stay in memory, and the
-        # recordings of the folder on show and of the next folder are read ahead.
-        self.load = RecordingCache(24)
+        # recordings of the folder on show and of the next folder are read ahead. Without a
+        # card for each recording, only the recordings the mean recordings are made of are.
+        self.cards_shown = bool(remembered("roi_show_each_recording", True))
+        self.load = RecordingCache(KEPT_WITH_CARDS if self.cards_shown else KEPT_MEAN_ONLY)
         self.folder_mean = lru_cache(maxsize=2)(self._folder_mean)
         self.detect = lru_cache(maxsize=32)(self._detect)
 
@@ -117,6 +122,14 @@ class RoiSelectionWindow(QMainWindow):
         self.view_box = QComboBox()
         self.view_box.addItems([VIEW_RESPONSE, VIEW_MOVIE, VIEW_BASELINE])
         self.view_box.currentIndexChanged.connect(self.show_image)
+        self.cards_box = QCheckBox("Each recording")
+        self.cards_box.setChecked(self.cards_shown)
+        self.cards_box.setToolTip(
+            "Show a card for every recording of the folder under the plots. Untick it to read only the recordings "
+            "the mean recording is made of: faster, and much less memory. Any recording can still be shown by "
+            "choosing it in the Recording list."
+        )
+        self.cards_box.toggled.connect(self.show_cards)
         settings_button = QPushButton("Settings…")
         settings_button.clicked.connect(self.change_settings)
         export_button = QPushButton("Export table…")
@@ -129,6 +142,8 @@ class RoiSelectionWindow(QMainWindow):
         top.addSpacing(15)
         top.addWidget(QLabel("Show:"))
         top.addWidget(self.view_box)
+        top.addSpacing(15)
+        top.addWidget(self.cards_box)
         top.addStretch()
         top.addWidget(settings_button)
         top.addWidget(export_button)
@@ -156,6 +171,7 @@ class RoiSelectionWindow(QMainWindow):
         self.strip = RecordingStrip()
         self.strip.selected.connect(self.choose_recording)
         self.strip.flag_toggled.connect(self.toggle_flag)
+        self.strip.setVisible(self.cards_shown)
 
         self.roi_tool = QRadioButton("Move the ROI")
         self.roi_tool.setChecked(True)
@@ -357,9 +373,9 @@ class RoiSelectionWindow(QMainWindow):
             self.peak = peak_frame(stack, self.settings)
             at_peak = response_at(stack, self.peak, self.settings) * 100
             self.stack = stack
-        except (OSError, ValueError) as error:
+        except (OSError, ValueError, MemoryError) as error:
             self.trace.clear()
-            self.status.setText(f"⚠ {error}")
+            self.status.setText(f"⚠ {error}" if str(error) else "⚠ There is not enough memory to show this recording.")
             return
         finally:
             QApplication.restoreOverrideCursor()
@@ -440,8 +456,21 @@ class RoiSelectionWindow(QMainWindow):
 
     def refresh_strip(self):
         """Fill every card of the strip again, one at a time so the window stays usable while recordings load."""
+        if not self.cards_shown:
+            self.cards_to_fill = []
+            return
         self.cards_to_fill = [MEAN] + [path.name for path in self.recordings]
         self.strip_timer.start()
+
+    def show_cards(self, shown):
+        """Show a card for each recording, or the mean recording only (which reads and keeps far fewer recordings)."""
+        self.cards_shown = shown
+        remember(roi_show_each_recording=shown)
+        self.strip.setVisible(shown)
+        self.load.resize(KEPT_WITH_CARDS if shown else KEPT_MEAN_ONLY)
+        if shown and self.selection is not None:
+            self.load.read_ahead(self.recordings)
+        self.refresh_strip()
 
     def fill_next_card(self):
         if not self.cards_to_fill or self.selection is None:
@@ -456,6 +485,11 @@ class RoiSelectionWindow(QMainWindow):
             self.strip.fill(recording, response, trace, f"{trace[start:stop].max():.0f} %")
         except (OSError, ValueError) as error:
             self.strip.fail(recording, "cannot be shown", str(error))
+        except MemoryError:
+            self.cards_to_fill = []
+            self.strip.fail(recording, "not enough memory", "There is not enough memory to read every recording of "
+                            "this folder. Untick 'Each recording' at the top to see the mean recording only.")
+            return
         if self.cards_to_fill:
             self.strip_timer.start()
 
@@ -580,8 +614,9 @@ class RoiSelectionWindow(QMainWindow):
         return next((r for r in rows if not self._reviewed(r)), None)
 
     def read_ahead(self, row):
-        """Start reading the recordings of this folder, then those the next folder opens on."""
-        self.load.read_ahead(self.recordings)
+        """Start reading the recordings of this folder (when each has a card), then those the next folder opens on."""
+        if self.cards_shown:
+            self.load.read_ahead(self.recordings)
         following = self._next_unreviewed(row)
         if following is None:
             following = row + 1 if row + 1 < len(self.folders) else None
@@ -683,6 +718,8 @@ class RoiSelectionWindow(QMainWindow):
         self.status.setText(f"Table saved: {path}")
 
     def closeEvent(self, event):
+        self.strip_timer.stop()
+        self.cards_to_fill = []
         self.load.stop()
         self.closed.emit()
         super().closeEvent(event)

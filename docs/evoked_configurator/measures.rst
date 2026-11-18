@@ -104,8 +104,11 @@ Baselines, peaks, responses and fits
      - Definition
    * - Baseline (B1, BL …)
      - The mean of the trace over the baseline window.
-   * - Peak (P1, P2 …)
-     - The maximum of the trace over the peak window.
+   * - Peak (P1 peak, P2 peak …)
+     - The maximum of the trace over the peak window, with the baseline still
+       in it. The response takes the baseline out: use the response. Written
+       only when *Write the peak of each pulse too* is ticked (tab *Pulses and
+       windows*).
    * - Response, brightness trace (with or without a partner)
      - Peak ÷ baseline × 100 − 100: the change of brightness in percent
        (dF/F).
@@ -226,8 +229,12 @@ folder) into one value per measure:
 
 * the **minimum**, **maximum** and **mean** over all recordings, ignoring
   empty values;
-* the **mean over a range of conditions**, for example over the recordings
-  with a current from 100 to 400 µA, both included;
+* **means over some of the recordings**: over the recordings with a
+  condition in a range, for example a current from 100 to 400 µA, both
+  included, or over the recordings with certain file names, for example
+  ``hi*`` for ``hi1.tif`` to ``hi4.tif`` (``*`` stands for any characters;
+  several names are separated by commas). A summary can have several, each
+  with its own name;
 * the **baseline spread** of each baseline window: (largest − smallest) ÷
   smallest × 100 over the recordings, which shows how much the baseline
   drifted during the experiment.

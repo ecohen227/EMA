@@ -12,7 +12,7 @@ from ema.roi_selection import RoiSettings
 project = "EMA"
 author = "Milnerwood lab"
 release = ema.__version__
-extensions = ["sphinx.ext.autodoc"]
+extensions = ["sphinx.ext.autodoc", "sphinx.ext.mathjax"]
 exclude_patterns = ["_build", "_generated"]
 html_theme = "furo"
 html_title = f"EMA {release}"

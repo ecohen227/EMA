@@ -23,7 +23,7 @@ shortened:
        "near_um": 480.0, "site_um": 100.0, "together_ms": 1000.0, "fit_radius_um": 400.0, "good_fit_r2": 0.2, "max_width_um": 380.0,
        "brightness_frames": [10, 95], "block_px": 4, "dark_fraction": 0.3, "electrode_fraction": 0.5,
        "bleach_order": 4, "despike_frames": 3,
-       "echo_rule": true, "echo_ms": 533.0, "echo_um": 256.0, "echo_ratio": 1.0
+       "echo_rule": true, "echo_ms": 550.0, "echo_um": 256.0, "echo_ratio": 1.0
      },
      "measures": {
        "per_event": ["onset", "strength", "fitted peak", "width", "…"],

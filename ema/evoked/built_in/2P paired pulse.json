@@ -2,7 +2,7 @@
   "format": "EMA evoked protocol",
   "format_version": 1,
   "name": "2P paired pulse",
-  "description": "Two pulses 4 s apart. Each stimulated recording is corrected for bleaching with the unstimulated one recorded right after it. Measured: baselines, peaks, dF/F of each pulse, the paired-pulse ratio, the decay time constant after P1, and per-slice summaries over the currents.",
+  "description": "Two pulses 4 s apart. Each stimulated recording is corrected for bleaching with the unstimulated one recorded right after it. Measured: baselines, dF/F of each pulse, the paired-pulse ratio, the decay time constant after P1, and per-slice summaries over the currents.",
   "sampling_interval_ms": 4.849,
   "trace": "brightness",
   "recordings": {
@@ -51,6 +51,7 @@
       "length": 412
     }
   ],
+  "write_peaks": false,
   "kinetics": {
     "measures": [],
     "pulses": null,
@@ -78,9 +79,16 @@
     }
   },
   "slice_summary": {
+    "file": true,
     "statistics": ["min", "max", "mean"],
-    "condition_range": [100.0, 400.0],
+    "means": [
+      {
+        "name": "100-400",
+        "condition_range": [100.0, 400.0]
+      }
+    ],
     "baseline_spread": true,
     "condition_fits": []
-  }
+  },
+  "exclusions": []
 }

@@ -11,7 +11,9 @@ A protocol says
   (its maximum);
 - what is derived from them: comparisons of two responses, exponential fits,
   measures of the response shape and of its spread over the slice, and
-  summaries over a slice, including curves fitted across its recordings.
+  summaries over a slice, including curves fitted across its recordings;
+- which slices are left out of the tables (exclusions), and whether the peak
+  of each pulse is written besides its response.
 
 Times are frames: windows are [start, end) and frame 0 is the second frame of
 the TIFF, because the first is dropped when a recording is read. Nothing here
@@ -21,6 +23,7 @@ needs the GUI.
 import json
 import re
 from dataclasses import dataclass, field
+from fnmatch import fnmatchcase
 from pathlib import Path
 
 from ..recordings import FRAME_MS, has_skip_word, is_no_stim
@@ -54,6 +57,33 @@ FIT_KINDS = (SINGLE, DOUBLE)
 RECOVERY, SATURATION = "recovery", "saturation"
 CONDITION_MODELS = (RECOVERY, SATURATION)
 STATISTICS = ("min", "max", "mean")
+
+# Which recordings a mean over recordings or an exclusion takes: those in a condition range, those with certain
+# file names, or (an exclusion only) all
+BY_CONDITION, BY_FILES, ALL_RECORDINGS = "condition", "files", "all"
+
+# Exclusions. The one value an exclusion makes from the recordings of a slice:
+SPREAD_OF_LARGEST, SPREAD_OF_SMALLEST, RANGE = "spread of largest", "spread of smallest", "range"
+VARIATION, MEAN, MEDIAN, SMALLEST, LARGEST = "coefficient of variation", "mean", "median", "smallest", "largest"
+SLICE_VALUES = {  # name -> (formula over the values of the slice's recordings, least number of recordings it needs)
+    SPREAD_OF_LARGEST: ("(largest − smallest) ÷ largest × 100", 2),
+    SPREAD_OF_SMALLEST: ("(largest − smallest) ÷ smallest × 100", 2),
+    RANGE: ("largest − smallest", 2),
+    VARIATION: ("standard deviation ÷ mean × 100", 2),
+    MEAN: ("mean", 1),
+    MEDIAN: ("median", 1),
+    SMALLEST: ("smallest", 1),
+    LARGEST: ("largest", 1),
+}
+IN_PERCENT = (SPREAD_OF_LARGEST, SPREAD_OF_SMALLEST, VARIATION)
+# How it decides which slices are unusual: by the slices' quartiles or mean, or by a fixed limit
+INTERQUARTILE, DEVIATIONS, ABOVE, BELOW = "interquartile", "standard deviations", "above", "below"
+EXCLUSION_TESTS = (INTERQUARTILE, DEVIATIONS, ABOVE, BELOW)
+EITHER_SIDE, HIGH_SIDE, LOW_SIDE = "either", "high", "low"
+SIDES = (EITHER_SIDE, HIGH_SIDE, LOW_SIDE)
+# Which slices the quartiles or the mean are taken over
+AMONG_ALL, AMONG_GROUP = "all slices", "its group"
+AMONGS = (AMONG_ALL, AMONG_GROUP)
 
 
 class ProtocolError(ValueError):
@@ -161,6 +191,109 @@ class ConditionFit:
 
 
 @dataclass
+class SliceMean:
+    """A mean, per slice, over some of its recordings: those with a condition from `low` to `high`, or those whose
+    file name matches one of the patterns in `files` (with or without .tif, upper and lower case alike; * stands for
+    any characters, ? for one)."""
+
+    name: str  # its columns are "<measure> mean <name>"
+    by: str = BY_CONDITION
+    low: float = 100.0
+    high: float = 400.0
+    files: list = field(default_factory=list)  # such as ["hi*"] or ["hi1", "hi2", "hi3", "hi4"]
+
+    def includes(self, file_name, condition):
+        return _chosen(self.by, file_name, condition, self.low, self.high, self.files)
+
+    def automatic_name(self):
+        """The name it has until it is given another: '100-400', or the file names without wildcards ('hi')."""
+        if self.by == BY_FILES:
+            return "+".join(re.sub(r"\.tiff?$|[*?\[\]]", "", pattern, flags=re.IGNORECASE) for pattern in self.files)
+        return f"{self.low:g}-{self.high:g}"
+
+    def which(self, condition):
+        """The recordings it takes, in words, such as 'with a Current (µA) from 100 to 400'."""
+        if self.by == BY_FILES:
+            return f"whose file name matches {', '.join(self.files)}"
+        return f"with a {condition} from {self.low:g} to {self.high:g}"
+
+
+def _chosen(by, file_name, condition, low, high, files):
+    """Whether a recording is one of those chosen by a condition range, by file-name patterns, or (ALL_RECORDINGS) all."""
+    if by == BY_FILES:
+        name = file_name.lower()
+        return any(fnmatchcase(name, pattern.lower()) or fnmatchcase(Path(name).stem, pattern.lower()) for pattern in files)
+    if by == BY_CONDITION:
+        return condition is not None and low <= condition <= high
+    return True
+
+
+@dataclass
+class Exclusion:
+    """Leaves a slice out of both tables when one value made from its recordings is unusual among the slices.
+
+    The value combines one per-recording measure over the slice's recordings
+    (all, or those in a condition range, or with certain file names), such
+    as the spread of B1: (largest B1 − smallest B1) ÷ largest B1 × 100. The
+    slice is left out when that value is outside Q1 − k·IQR to Q3 + k·IQR of
+    the slices (INTERQUARTILE, k = `factor`), more than k standard deviations
+    from their mean (DEVIATIONS), or above or below `limit`. With `side`,
+    only unusually high or only unusually low values count. The slices are
+    all slices, or (AMONG_GROUP) those of the slice's group.
+    """
+
+    measure: str
+    statistic: str = SPREAD_OF_LARGEST
+    by: str = ALL_RECORDINGS
+    low: float = 100.0
+    high: float = 400.0
+    files: list = field(default_factory=list)
+    test: str = INTERQUARTILE
+    factor: float = 1.5
+    limit: float = 0.0
+    side: str = EITHER_SIDE
+    among: str = AMONG_ALL
+
+    def includes(self, file_name, condition):
+        return _chosen(self.by, file_name, condition, self.low, self.high, self.files)
+
+    def unit(self, measure_unit):
+        """The unit of the slice's value, given the unit of the measure."""
+        return "%" if self.statistic in IN_PERCENT else measure_unit
+
+    @property
+    def relative(self):
+        """True when it compares a slice with the other slices; False for a fixed limit."""
+        return self.test in (INTERQUARTILE, DEVIATIONS)
+
+    def value_text(self, condition_label=""):
+        """The slice's value in words, such as 'B1: (largest − smallest) ÷ largest × 100 over its recordings'."""
+        formula = SLICE_VALUES[self.statistic][0]
+        which = {BY_FILES: f" whose file name matches {', '.join(self.files)}",
+                 BY_CONDITION: f" with a {condition_label or 'condition'} from {self.low:g} to {self.high:g}"}.get(self.by, "")
+        return f"{self.measure}: {formula} over its recordings{which}"
+
+    def test_text(self, unit=""):
+        """When a slice is left out, in words, such as 'above Q3 + 1.5 × IQR of all slices'."""
+        among = "of all slices" if self.among == AMONG_ALL else "of the slices of its group"
+        k = f"{self.factor:g}"
+        if self.test == INTERQUARTILE:
+            limits = {EITHER_SIDE: f"below Q1 − {k} × IQR or above Q3 + {k} × IQR", HIGH_SIDE: f"above Q3 + {k} × IQR",
+                      LOW_SIDE: f"below Q1 − {k} × IQR"}[self.side]
+            return f"{limits} {among} (Q1 and Q3 are the quartiles, IQR = Q3 − Q1)"
+        if self.test == DEVIATIONS:
+            where = {EITHER_SIDE: "from", HIGH_SIDE: "above", LOW_SIDE: "below"}[self.side]
+            return f"more than {k} standard deviations {where} the mean {among}"
+        return f"{self.test} {self.limit:g}{' ' + unit if unit and unit != 'ratio' else ''}"
+
+
+def file_patterns(text):
+    """File-name patterns from a text such as 'hi1, hi2' (or a list of them): stripped, the empty ones left out."""
+    parts = text.split(",") if isinstance(text, str) else text
+    return [str(part).strip() for part in parts if str(part).strip()]
+
+
+@dataclass
 class Column:
     """One number the analysis will produce: per recording, or per slice (a summary of the recordings)."""
 
@@ -195,8 +328,10 @@ class Protocol:
     near_to_far: list = field(default_factory=list)  # names of comparisons also measured as near-to-far indices
     spatial: SpatialSettings = field(default_factory=SpatialSettings)
     slice_file: bool = True  # write Evoked per slice.xlsx
+    write_peaks: bool = False  # write each pulse's peak (the maximum of the trace) besides its response
+    exclusions: list = field(default_factory=list)  # Exclusion: slices left out of both tables
     summary_statistics: list = field(default_factory=list)
-    summary_condition_range: list = None  # [low, high], or None
+    summary_means: list = field(default_factory=list)  # SliceMean
     summary_baseline_spread: bool = False
     condition_fits: list = field(default_factory=list)  # ConditionFit
 
@@ -346,6 +481,9 @@ class Protocol:
             fit.name = new if fit.name == old else fit.name
             if fit.measure == old or fit.measure.startswith(old + " "):
                 fit.measure = new + fit.measure[len(old):]
+        for exclusion in self.exclusions:
+            if exclusion.measure == old or exclusion.measure.startswith(old + " "):
+                exclusion.measure = new + exclusion.measure[len(old):]
         if self.kinetic_pulses is not None:
             self.kinetic_pulses = [new if n == old else n for n in self.kinetic_pulses]
         self.spatial_pulses = [new if n == old else n for n in self.spatial_pulses]
@@ -432,7 +570,13 @@ class Protocol:
     # ------------------------------------------------------------------
 
     def measures(self):
-        """Every number the analysis will produce, in order: per recording first, then per slice."""
+        """Every number the analysis will write, in order: per recording first, then per slice."""
+        per_recording = self.recording_measures(self.write_peaks)
+        return per_recording + self._slice_measures(per_recording, self.recording_measures())
+
+    def recording_measures(self, peaks=True):
+        """Every number measured per recording, in order. The peaks of the pulses are always measured (the
+        responses are made from them), but only written with `write_peaks`; `peaks` False leaves them out."""
         per_recording = []
         for name, window in self.baselines.items():
             where = "set for each recording" if window == PER_RECORDING else window.text()
@@ -440,7 +584,9 @@ class Protocol:
 
         for pulse in self.pulses:
             where = "set for each recording" if pulse.per_recording else pulse.peak.text() if pulse.peak else "not set"
-            per_recording.append(Column(pulse.name, self.trace_unit, f"Maximum of the trace over the peak window ({where})."))
+            if peaks:
+                per_recording.append(Column(f"{pulse.name} peak", self.trace_unit,
+                                            f"Maximum of the trace over the peak window ({where})."))
             per_recording.append(Column(f"{pulse.name} response", "%", self.response_explanation(pulse)))
 
         for metric, pulse in self._chosen(KINETIC, self.kinetic_measures, self.kinetic_pulse_names()):
@@ -473,7 +619,7 @@ class Protocol:
             else:
                 described = [("ms", f"Time constant τ of A·exp(−t/τ) + C {where}.")]
             per_recording += [Column(name, unit, text) for name, (unit, text) in zip(fit.measure_names(), described)]
-        return per_recording + self._slice_measures(per_recording)
+        return per_recording
 
     def kinetic_pulse_names(self):
         names = [p.name for p in self.pulses]
@@ -503,15 +649,15 @@ class Protocol:
         if self.trace == BRIGHTNESS:
             corrected = " of the bleaching-corrected trace" if self.partner != NO_PARTNER else ""
             return (
-                f"{pulse.name} ÷ {pulse.baseline} × 100 − 100: the change of brightness{corrected} from the baseline, "
+                f"{pulse.name} peak ÷ {pulse.baseline} × 100 − 100: the change of brightness{corrected} from the baseline, "
                 "in percent (dF/F)."
             )
         return (
-            f"{pulse.name} − {pulse.baseline}: the rise above the baseline, in percentage points of the "
+            f"{pulse.name} peak − {pulse.baseline}: the rise above the baseline, in percentage points of the "
             "stimulated ÷ unstimulated trace."
         )
 
-    def _slice_measures(self, per_recording):
+    def _slice_measures(self, per_recording, every):
         summary = []
         condition = f"{self.condition_name} ({self.condition_unit})" if self.condition_unit else self.condition_name
         for measure in per_recording:
@@ -519,16 +665,10 @@ class Protocol:
                 summary.append(
                     Column(f"{measure.name} {statistic}", measure.unit, f"The {statistic} of {measure.name} over the recordings of a slice.", "slice")
                 )
-            if self.summary_condition_range:
-                low, high = self.summary_condition_range
-                summary.append(
-                    Column(
-                        f"{measure.name} mean {low:g}-{high:g}",
-                        measure.unit,
-                        f"The mean of {measure.name} over the recordings of a slice with a {condition} from {low:g} to {high:g}.",
-                        "slice",
-                    )
-                )
+            for mean in self.summary_means:
+                summary.append(Column(f"{measure.name} mean {mean.name}", measure.unit,
+                                      f"The mean of {measure.name} over the recordings of a slice {mean.which(condition)}.",
+                                      "slice"))
         if self.summary_baseline_spread:
             for name in self.baselines:
                 summary.append(
@@ -540,7 +680,7 @@ class Protocol:
                         "slice",
                     )
                 )
-        units = {measure.name: measure.unit for measure in per_recording}
+        units = {measure.name: measure.unit for measure in every}
         for fit in self.condition_fits:
             summary += self._condition_fit_measures(fit, condition, units.get(fit.measure, ""))
         return summary
@@ -627,13 +767,27 @@ class Protocol:
                 found.append(f"The near-to-far index of {name} needs the comparison {name}.")
         if self.spatial_measures or self.near_to_far:
             found += self.spatial.problems()
-        if self.summary_condition_range and self.summary_condition_range[0] > self.summary_condition_range[1]:
-            found.append("The condition range of the slice summary must go from low to high.")
-        if self.condition_fits:
-            per_recording = {m.name for m in self.measures() if m.per == "recording"}
-            for fit in self.condition_fits:
-                if fit.measure not in per_recording:
-                    found.append(f"The fit across conditions {fit.name} uses {fit.measure}, which is not measured per recording.")
+        names = [mean.name for mean in self.summary_means]
+        if not all(names) or len(set(names)) < len(names):
+            found.append("Every mean over recordings of the slice summary needs a name of its own.")
+        for mean in self.summary_means:
+            if mean.by == BY_FILES and not mean.files:
+                found.append(f"The mean over recordings {mean.name} needs at least one file name, such as hi*.")
+            if mean.by == BY_CONDITION and mean.low > mean.high:
+                found.append(f"The condition range of the mean over recordings {mean.name} must go from low to high.")
+        per_recording = {m.name for m in self.recording_measures()}
+        for fit in self.condition_fits:
+            if fit.measure not in per_recording:
+                found.append(f"The fit across conditions {fit.name} uses {fit.measure}, which is not measured per recording.")
+        for n, exclusion in enumerate(self.exclusions, 1):
+            if exclusion.measure not in per_recording:
+                found.append(f"Exclusion {n} uses {exclusion.measure}, which is not measured per recording.")
+            if exclusion.by == BY_FILES and not exclusion.files:
+                found.append(f"Exclusion {n} needs at least one file name, such as hi*.")
+            if exclusion.by == BY_CONDITION and exclusion.low > exclusion.high:
+                found.append(f"The condition range of exclusion {n} must go from low to high.")
+            if exclusion.relative and not exclusion.factor >= 0:
+                found.append(f"The factor k of exclusion {n} must be 0 or more.")
         return found
 
     def _recording_problems(self):
@@ -690,6 +844,7 @@ class Protocol:
                 {"name": c.name, "pulse": c.pulse, "relative_to": c.relative_to, "as": c.scale} for c in self.comparisons
             ],
             "fits": [{"name": f.name, "kind": f.kind, "after": f.after, "start": f.start, "length": f.length} for f in self.fits],
+            "write_peaks": self.write_peaks,
             "kinetics": {
                 "measures": self.kinetic_measures,
                 "pulses": self.kinetic_pulses,
@@ -704,12 +859,13 @@ class Protocol:
             "slice_summary": {
                 "file": self.slice_file,
                 "statistics": self.summary_statistics,
-                "condition_range": self.summary_condition_range,
+                "means": [_mean_to_dict(mean) for mean in self.summary_means],
                 "baseline_spread": self.summary_baseline_spread,
                 "condition_fits": [
                     {"name": f.name, "measure": f.measure, "model": f.model, "plateau": f.plateau} for f in self.condition_fits
                 ],
             },
+            "exclusions": [_exclusion_to_dict(exclusion) for exclusion in self.exclusions],
         }
 
     @classmethod
@@ -753,18 +909,24 @@ class Protocol:
                 spatial=SpatialSettings.from_dict(spatial.get("settings", {})),
                 slice_file=bool(summary.get("file", True)),
                 summary_statistics=[_choice(s, STATISTICS, "statistic") for s in summary.get("statistics", [])],
-                summary_condition_range=_range(summary.get("condition_range")),
+                summary_means=_means_from_dict(summary),
                 summary_baseline_spread=bool(summary.get("baseline_spread", False)),
                 condition_fits=[
                     ConditionFit(str(f["name"]), str(f["measure"]), _choice(f.get("model", RECOVERY), CONDITION_MODELS, "model"),
                                  None if f.get("plateau") is None else float(f["plateau"]))
                     for f in summary.get("condition_fits", [])
                 ],
+                write_peaks=bool(data.get("write_peaks", True)),  # protocols saved before it could be chosen wrote them
+                exclusions=[_exclusion_from_dict(e) for e in data.get("exclusions", [])],
             )
         except (KeyError, TypeError, ValueError, AttributeError) as error:
             if isinstance(error, ProtocolError):
                 raise
             raise ProtocolError(f"The protocol file is incomplete or damaged ({error!r}).") from error
+        pulses = {pulse.name for pulse in protocol.pulses}
+        for fit in protocol.condition_fits:
+            if fit.measure in pulses:  # saved when a pulse's peak column had the pulse's own name
+                fit.measure += " peak"
         return protocol
 
     def save(self, path):
@@ -811,6 +973,66 @@ def _range(value):
         return None
     low, high = value
     return [float(low), float(high)]
+
+
+def _mean_to_dict(mean):
+    if mean.by == BY_FILES:
+        return {"name": mean.name, "files": mean.files}
+    return {"name": mean.name, "condition_range": [mean.low, mean.high]}
+
+
+def _means_from_dict(summary):
+    """The means over recordings of a slice summary. A summary with a condition range instead has that one mean."""
+    if "means" not in summary:
+        found = _range(summary.get("condition_range"))
+        return [] if found is None else [SliceMean(f"{found[0]:g}-{found[1]:g}", BY_CONDITION, *found)]
+    means = []
+    for saved in summary["means"]:
+        if "files" in saved:
+            means.append(SliceMean(str(saved["name"]), BY_FILES, files=file_patterns(saved["files"])))
+        else:
+            low, high = _range(saved["condition_range"])
+            means.append(SliceMean(str(saved["name"]), BY_CONDITION, low, high))
+    return means
+
+
+def _exclusion_to_dict(exclusion):
+    recordings = ALL_RECORDINGS
+    if exclusion.by == BY_FILES:
+        recordings = {"files": exclusion.files}
+    elif exclusion.by == BY_CONDITION:
+        recordings = {"condition_range": [exclusion.low, exclusion.high]}
+    return {
+        "measure": exclusion.measure,
+        "statistic": exclusion.statistic,
+        "recordings": recordings,
+        "test": exclusion.test,
+        "factor": exclusion.factor,
+        "limit": exclusion.limit,
+        "side": exclusion.side,
+        "among": exclusion.among,
+    }
+
+
+def _exclusion_from_dict(data):
+    recordings = data.get("recordings", ALL_RECORDINGS)
+    exclusion = Exclusion(
+        measure=str(data["measure"]),
+        statistic=_choice(data.get("statistic", SPREAD_OF_LARGEST), tuple(SLICE_VALUES), "value of a slice"),
+        test=_choice(data.get("test", INTERQUARTILE), EXCLUSION_TESTS, "test of an exclusion"),
+        factor=float(data.get("factor", 1.5)),
+        limit=float(data.get("limit", 0.0)),
+        side=_choice(data.get("side", EITHER_SIDE), SIDES, "side of an exclusion"),
+        among=_choice(data.get("among", AMONG_ALL), AMONGS, "set of slices"),
+    )
+    if isinstance(recordings, dict) and "files" in recordings:
+        exclusion.by, exclusion.files = BY_FILES, file_patterns(recordings["files"])
+    elif isinstance(recordings, dict) and "condition_range" in recordings:
+        exclusion.by = BY_CONDITION
+        exclusion.low, exclusion.high = _range(recordings["condition_range"])
+    elif recordings != ALL_RECORDINGS:
+        raise ProtocolError(f"'{recordings}' is not a known choice of recordings for an exclusion.")
+    return exclusion
 
 
 def _window_to_json(window):

@@ -10,7 +10,7 @@ import os
 import re
 import threading
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import CancelledError, ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -75,8 +75,9 @@ class RecordingCache:
     """Reads recordings with `load` and keeps the last `size` in memory; call it like `load_stack`.
 
     `read_ahead(paths)` reads recordings in a background thread, so that
-    they are ready by the time they are wanted. `stop()` drops what is
-    waiting to be read and empties the cache.
+    they are ready by the time they are wanted. `resize(size)` keeps fewer or
+    more. `stop()` drops what is waiting to be read and empties the cache for
+    good: recordings asked for afterwards are read but no longer kept.
     """
 
     def __init__(self, size, load=load_stack):
@@ -86,6 +87,7 @@ class RecordingCache:
         self._reading = {}  # path -> Future of a read ahead
         self._lock = threading.Lock()
         self._reader = ThreadPoolExecutor(max_workers=1, thread_name_prefix="EMA read-ahead")
+        self._stopped = False
 
     def __call__(self, path):
         path = Path(path)
@@ -94,19 +96,36 @@ class RecordingCache:
                 self._stacks.move_to_end(path)
                 return self._stacks[path]
             reading = self._reading.get(path)
-        stack = reading.result() if reading is not None else self._load(path)
+        stack = None
+        if reading is not None:
+            try:
+                stack = reading.result()
+            except CancelledError:  # dropped by stop() before it was read: read it now
+                stack = None
+        if stack is None:
+            stack = self._load(path)
         self._keep(path, stack)
         return stack
 
     def read_ahead(self, paths):
         with self._lock:
+            if self._stopped:
+                return
             for path in map(Path, paths):
                 if path not in self._stacks and path not in self._reading:
                     self._reading[path] = self._reader.submit(self._read, path)
 
-    def stop(self):
-        self._reader.shutdown(wait=False, cancel_futures=True)
+    def resize(self, size):
+        """Keep at most `size` recordings from now on; the least recently used go first."""
         with self._lock:
+            self.size = size
+            self._trim()
+
+    def stop(self):
+        with self._lock:
+            self._stopped = True
+            self._reader.shutdown(wait=False, cancel_futures=True)
+            self._reading.clear()
             self._stacks.clear()
 
     def _read(self, path):
@@ -120,10 +139,15 @@ class RecordingCache:
 
     def _keep(self, path, stack):
         with self._lock:
+            if self._stopped:
+                return
             self._stacks[path] = stack
             self._stacks.move_to_end(path)
-            while len(self._stacks) > self.size:
-                self._stacks.popitem(last=False)
+            self._trim()
+
+    def _trim(self):
+        while len(self._stacks) > self.size:
+            self._stacks.popitem(last=False)
 
 
 def is_no_stim(path):

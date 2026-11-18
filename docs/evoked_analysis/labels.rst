@@ -2,8 +2,8 @@ Labels from folder names
 ========================
 
 Every row of the tables carries **labels** read from the names of its
-folders: the line, genotype, treatment, duration, sex, animal and slice, for
-example. They are set on the **Labels** tab and checked on the **Folders**
+folders: the line, genotype, treatment, treatment time, sex, animal and
+slice, for example. They are set on the **Labels** tab and checked on the **Folders**
 and **Possible typos** tabs. Both analyses use the same labels.
 
 .. figure:: ../screenshots/analysis_labels.png

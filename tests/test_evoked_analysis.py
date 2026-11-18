@@ -11,7 +11,21 @@ from PyQt5.QtWidgets import QApplication, QMessageBox
 from ema import analysis_window, user_settings
 from ema.evoked import analysis as analysis_module
 from ema.evoked.analysis import FILE_NAME, Analysis, plan, run
-from ema.evoked.protocol import AS_LISTED, LISTED, RATIO, Comparison, Fit, Protocol, Pulse, Recording, Window
+from ema.evoked.protocol import (
+    ABOVE,
+    AS_LISTED,
+    BELOW,
+    LISTED,
+    MEAN,
+    RATIO,
+    Comparison,
+    Exclusion,
+    Fit,
+    Protocol,
+    Pulse,
+    Recording,
+    Window,
+)
 from ema.evoked.workbook import PER_RECORDING, PER_SLICE, write_workbooks
 from ema.excel import TablesLocked, sheet_names
 from ema.evoked_configurator.example import ExampleFolder
@@ -231,8 +245,8 @@ def test_the_per_recording_file_has_a_table_and_a_prism_sheet_per_measure(study,
     analysis = measured(study, protocol, tmp_path / "out")
     write_workbooks(analysis)
     book = load_workbook(tmp_path / "out" / PER_RECORDING)
-    assert book.sheetnames == ["Recordings", "B1", "P1", "P1 response", "P1 half-decay", "P1 footprint width",
-                               "P1÷P1", "Tau", "Notes", "About"]
+    assert book.sheetnames == ["Recordings", "B1", "P1 response", "P1 half-decay", "P1 footprint width",
+                               "P1÷P1", "Tau", "Notes", "About"]  # no P1 peak: peaks are written only when chosen
     table = rows(book["Recordings"])
     assert table[0][:13] == ["Folder", "Recording", "Unstimulated partner", "Line", "Genotype", "Treatment", "Treatment time",
                              "Sex", "Animal", "Slice", "Current (µA)", "ROI reviewed", "B1 (counts)"]
@@ -279,7 +293,7 @@ def test_notes_say_what_was_skipped_and_which_labels_are_missing(study, tmp_path
     notes = rows(book["Notes"])[1:]
     assert ["LKI WT F5823/IFN 4H/Slice 1/input output", "100uA.tif", "Not measured: Flagged in ROI Selection: drift"] in notes
     assert ["LKI WT F5823/IFN 4H/Slice 1/input output", None, "No Treatment time in the folder names."] in notes
-    assert rows(book["P1"])[2][1] == "WT (no Treatment time)"
+    assert rows(book["P1 response"])[2][1] == "WT (no Treatment time)"
 
 
 def test_a_file_open_in_excel_is_reported(study, tmp_path, monkeypatch):
@@ -360,6 +374,12 @@ def test_the_window_runs_an_analysis_and_writes_the_tables(app, study, tmp_path,
     window.worker.wait()
     app.processEvents()
     assert window.status.text() == "Done in 0 min 0 s: 0 folders measured (0 recordings), 3 unchanged.\nTables written."
+
+    changed = small_protocol(exclusions=[Exclusion("P1 response", MEAN, test=ABOVE, limit=-1000)])  # every slice
+    changed.save(protocol_file)  # saved in the configurator while the window is open
+    assert window.write_tables()  # Rewrite the tables: no run needed, as nothing is measured again
+    assert rows(load_workbook(tmp_path / "out" / PER_RECORDING)["Exclusions"])[1][0].startswith("3 of 3 slices")
+    assert Analysis.load(tmp_path / "out" / FILE_NAME).protocol().exclusions == changed.exclusions
     window.close()
 
 
@@ -423,6 +443,44 @@ def test_the_per_slice_file_can_be_turned_off(study, tmp_path):
     assert (tmp_path / "out" / PER_RECORDING).is_file() and not (tmp_path / "out" / PER_SLICE).exists()
 
 
+def test_peaks_and_exclusions_change_only_the_tables(study, tmp_path):
+    protocol = small_protocol()
+    analysis = measured(study, protocol, tmp_path / "out")
+    protocol.write_peaks = True
+    protocol.exclusions = [Exclusion("B1", test=ABOVE, limit=0)]
+    assert analysis.is_current(protocol)  # nothing is measured again
+    analysis.measuring_with(protocol)
+    write_workbooks(analysis)
+    book = load_workbook(tmp_path / "out" / PER_RECORDING)
+    assert "P1 peak" in book.sheetnames
+    assert "P1 peak mean" in load_workbook(tmp_path / "out" / PER_SLICE).sheetnames  # summarised when it was measured
+
+
+def test_a_slice_left_out_by_an_exclusion_is_in_neither_file(study, tmp_path):
+    protocol = small_protocol()
+    analysis = measured(study, protocol, tmp_path / "out")
+    means = {result.name: np.mean([r.values["P1 response"] for r in result.recordings])
+             for result in analysis.folders.values() if result.recordings}
+    weakest, *others = sorted(means, key=means.get)
+    protocol.exclusions = [Exclusion("P1 response", MEAN, test=BELOW, limit=(means[weakest] + means[others[0]]) / 2)]
+    analysis.measuring_with(protocol)
+    write_workbooks(analysis)
+    for name in (PER_RECORDING, PER_SLICE):
+        book = load_workbook(tmp_path / "out" / name)
+        table = rows(book["Recordings" if name == PER_RECORDING else "Slices"])
+        assert weakest not in {row[0] for row in table} and set(others) <= {row[0] for row in table}
+        exclusions = rows(book["Exclusions"])
+        assert exclusions[1][0].startswith("1 of 3 slices are left out")
+        assert exclusions[2][1] == "P1 response: mean over its recordings; left out when below " + \
+            f"{protocol.exclusions[0].limit:g} %."
+        verdicts = {row[0]: row[7] for row in exclusions[5:]}
+        assert verdicts == {weakest: "yes", **{other: "no" for other in others}}
+        notes = [row[2] for row in rows(book["Notes"])[1:] if row[0] == weakest]
+        assert any(note.startswith("Left out by exclusion 1: P1 response: mean over its recordings is ") for note in notes)
+    about = dict(row[:2] for row in rows(book["About"]) if row[0])
+    assert about["Slices"].endswith("1 left out by the exclusions (see the Exclusions sheet)")
+
+
 def test_extra_recordings_stay_off_the_measure_sheets(study, tmp_path):
     folder = study.recordings_folder / "LKI HET M5821/CTRL 2H/Slice 1/input output"
     make_recording(folder / "200uA test pulse.tif", 0.05, seed=7, clock="09:58:00")
@@ -441,3 +499,28 @@ def test_extra_recordings_stay_off_the_measure_sheets(study, tmp_path):
             "(both are on the Recordings sheet). To use this one instead, flag 200uA.tif in ROI Selection."] in notes
     assert ["test stim.tif", "Has no condition (its name does not start with a number), so it is on the Recordings "
             "sheet only."] in notes
+
+
+def test_a_mean_over_recordings_by_file_name(study, tmp_path):
+    from ema.evoked.protocol import BY_CONDITION, BY_FILES, SliceMean
+
+    folder = study.recordings_folder / "LKI WT F5823/IFN 4H/Slice 1/input output"
+    make_recording(folder / "hi1.tif", 0.4, seed=8, clock="10:05:00")
+    make_recording(folder / "hi2.tif", 0.8, seed=9, clock="10:06:00")
+    means = [SliceMean("100-400", BY_CONDITION, 100.0, 400.0), SliceMean("hi", BY_FILES, files=["hi*"])]
+    analysis = measured(study, small_protocol(summary_means=means), tmp_path / "out")
+    result = analysis.folders[folder.as_posix()]
+    response = {r.file: r.values["P1 response"] for r in result.recordings}
+    assert result.summary["P1 response mean hi"] == pytest.approx((response["hi1.tif"] + response["hi2.tif"]) / 2)
+    assert result.summary["P1 response mean 100-400"] == pytest.approx((response["100uA.tif"] + response["200uA.tif"]) / 2)
+    write_workbooks(analysis)
+    header = rows(load_workbook(tmp_path / "out" / PER_SLICE)["Slices"])[0]
+    assert "P1 response mean hi (%)" in header
+
+
+def test_results_kept_from_a_protocol_saved_with_a_condition_range_are_kept():
+    old = small_protocol(summary_means=[]).to_dict()
+    del old["slice_summary"]["means"]
+    old["slice_summary"]["condition_range"] = [100.0, 400.0]
+    analysis = Analysis(None, method=old, results_version=Analysis.RESULTS_VERSION)
+    assert analysis.is_current(Protocol.from_dict(old))

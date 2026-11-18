@@ -27,7 +27,7 @@ from pathlib import Path
 from ..kept_results import FolderResult, KeptAnalysis, Plan, RecordingResult, fingerprint, now, why_not_measured
 from ..recordings import list_recordings, load_stack
 from .measures import measure, summarise
-from .protocol import EVERY, Protocol
+from .protocol import EVERY, Protocol, ProtocolError
 from .spatial import measure_spatial
 from .traces import find_partner, make_movie, make_trace
 
@@ -40,7 +40,7 @@ class Analysis(KeptAnalysis):
     FILE_NAME = FILE_NAME
     FORMAT = "EMA evoked analysis"
     METHOD = "protocol"
-    RESULTS_VERSION = 1
+    RESULTS_VERSION = 2  # 2: peaks are named "<pulse> peak"
 
     def protocol(self):
         return Protocol.from_dict(self.method) if self.method else None
@@ -51,9 +51,15 @@ class Analysis(KeptAnalysis):
 
 
 def _measuring(data):
-    """A protocol's file contents without the switch for the per-slice file."""
+    """A protocol's file contents as this EMA writes them, without what only changes the tables: the switches for
+    the per-slice file and for the peaks, and the exclusions."""
+    try:
+        data = Protocol.from_dict(data).to_dict()
+    except ProtocolError:
+        pass
     summary = {key: value for key, value in data.get("slice_summary", {}).items() if key != "file"}
-    return {**data, "slice_summary": summary}
+    kept = {key: value for key, value in data.items() if key not in ("write_peaks", "exclusions")}
+    return {**kept, "slice_summary": summary}
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +205,8 @@ def measure_folder(protocol, folder, selection, step=None):
             problems=list(measurement.problems) + _partner_notes(path, partner, times),
         ))
     if result.recordings:
-        result.summary = summarise(protocol, [(r.condition, r.values) for r in result.recordings])
+        result.summary = summarise(protocol, [(r.condition, r.values) for r in result.recordings],
+                                   [r.file for r in result.recordings])
     return result
 
 

@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 from matplotlib.backend_bases import MouseEvent
-from PyQt5.QtWidgets import QApplication, QFileDialog, QInputDialog, QMessageBox
+from PyQt5.QtWidgets import QApplication, QDoubleSpinBox, QFileDialog, QInputDialog, QMessageBox
 
 from ema import user_settings
 from ema.evoked.presets import LIBRARY
@@ -427,3 +427,85 @@ def test_fits_across_conditions_from_the_last_tab(window):
     window.bar.open(0)  # 2P: no pulse set per recording, so an input-output fit
     window.editors[4].add_condition_fit()
     assert window.protocol.condition_fits[0].model == "saturation"
+
+
+def test_means_over_recordings_from_the_last_tab(window):
+    window.bar.open(2)  # 11P: its recordings are listed, hi1.tif to hi4.tif
+    editor = window.editors[4]
+    cell = lambda column: editor.means.grid.itemAtPosition(1, column).widget()  # noqa: E731
+    editor.add_mean()
+    mean = window.protocol.summary_means[0]
+    assert (mean.name, mean.by, mean.files) == ("hi", "files", ["hi*"]) and window.protocol.problems() == []
+    assert "P1 response mean hi" in [m.name for m in window.protocol.measures() if m.per == "slice"]
+    cell(2).setText("hi1, hi2")
+    cell(2).editingFinished.emit()
+    assert (mean.files, mean.name, cell(0).text()) == (["hi1", "hi2"], "hi1+hi2", "hi1+hi2")  # the name follows
+    cell(0).setText("first two")
+    cell(0).editingFinished.emit()
+    cell(2).setText("hi3")
+    cell(2).editingFinished.emit()
+    assert (mean.files, mean.name) == (["hi3"], "first two")  # a name given by hand stays
+
+    window.bar.open(0)  # 2P: a mean over 100 to 400 µA
+    mean = window.protocol.summary_means[0]
+    low, high = cell(2).findChildren(QDoubleSpinBox)
+    high.setValue(300)
+    assert (mean.low, mean.high, mean.name, cell(0).text()) == (100, 300, "100-300", "100-300")
+    editor.add_mean()  # there is a range already: the next is by file name
+    second = window.protocol.summary_means[1]
+    assert (second.by, second.name) == ("files", "")
+    assert any("needs at least one file name" in p for p in window.protocol.problems())
+    combo = editor.means.grid.itemAtPosition(2, 1).widget()
+    combo.setCurrentIndex(0)
+    combo.activated.emit(0)
+    assert (second.by, second.name) == ("condition", "100-400") and window.protocol.problems() == []
+
+
+def test_the_peaks_are_written_only_when_ticked(window):
+    shown = lambda: [window.table.item(r, 0).text() for r in range(window.table.rowCount())]  # noqa: E731
+    assert not window.protocol.write_peaks and "P1 peak" not in shown() and "P1 response" in shown()
+    window.editors[1].write_peaks.setChecked(True)
+    assert window.protocol.write_peaks and "P1 peak" in shown() and "P1 peak mean 100-400" in shown()
+    window.editors[4].add_condition_fit()  # a peak can be fitted across conditions whether it is written or not
+    window.protocol.condition_fits[0].measure = "P1 peak"
+    window.editors[1].write_peaks.setChecked(False)
+    assert window.protocol.problems() == []
+
+
+def test_exclusions_from_their_tab_and_tried_on_earlier_results(window, monkeypatch, tmp_path):
+    from ema.evoked.analysis import Analysis
+    from ema.kept_results import FolderResult, RecordingResult
+
+    analysis = Analysis(tmp_path / "earlier", method=window.protocol.to_dict())
+    for n, b1s in enumerate([[100, 99], [100, 98], [100, 97], [100, 99], [100, 60]], 1):
+        result = FolderResult(f"LKI WT M1/CTRL/Slice {n}", str(tmp_path))
+        result.recordings = [RecordingResult(f"{100 * k}uA.tif", {"B1": b1}, condition=100.0 * k)
+                             for k, b1 in enumerate(b1s, 1)]
+        analysis.folders[(tmp_path / result.name).as_posix()] = result
+    (tmp_path / "earlier").mkdir()
+    analysis.save()
+
+    window.tabs.setCurrentIndex(5)
+    editor = window.editors[5]
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: str(tmp_path / "earlier"))
+    editor.choose_results()
+    assert editor.results_label.text() == "earlier: 5 slices."
+    editor.add_exclusion()
+    exclusion = window.protocol.exclusions[0]
+    assert (exclusion.measure, exclusion.statistic, exclusion.test, exclusion.factor) == ("B1", "spread of largest",
+                                                                                          "interquartile", 1.5)
+    assert editor.results_label.text() == "earlier: 1 of 5 slices would be left out."
+    assert editor.verdicts.item(0, 0).text() == "LKI WT M1/CTRL/Slice 5" and editor.verdicts.item(0, 4).text() == "yes"
+    assert editor.verdicts.item(0, 2).text() == "40"
+
+    k = next(box for box in editor.list.findChildren(QDoubleSpinBox) if box.prefix() == "k = ")
+    k.setValue(30)  # a number changes the sentence and the trial without rebuilding the form
+    assert editor.results_label.text() == "earlier: 0 of 5 slices would be left out." and exclusion.factor == 30
+    assert k in editor.list.findChildren(QDoubleSpinBox)
+    sentence = editor.sentences[id(exclusion)][0].text()
+    assert sentence == ("Leaves out a slice when B1: (largest − smallest) ÷ largest × 100 over its recordings is below "
+                        "Q1 − 30 × IQR or above Q3 + 30 × IQR of all slices (Q1 and Q3 are the quartiles, IQR = Q3 − Q1).")
+    assert window.protocol.problems() == [] and window.protocol.to_dict()["exclusions"][0]["factor"] == 30
+
+    window.bar.open(1)  # another protocol: its own exclusions (none), and the same results to try them on
+    assert window.protocol.exclusions == [] and editor.results_label.text() == "earlier: 5 slices."

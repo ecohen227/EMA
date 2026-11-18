@@ -82,13 +82,13 @@ def test_paired_pulse_reproduces_the_2p_numbers(v2):
         for key, value in zip(reference, (b1, p1, b2, p2, dff1, dff2, ppr, tau)):
             reference[key].append(value)
 
-        assert (values["B1"], values["P1"], values["B2"], values["P2"]) == (b1, p1, b2, p2)
+        assert (values["B1"], values["P1 peak"], values["B2"], values["P2 peak"]) == (b1, p1, b2, p2)
         assert values["P1 response"] == dff1 and values["P2 response"] == dff2
         assert values["PPR"] == ppr and values["Tau"] == tau
 
     summary = summarise(protocol, rows)
     expected = v2.slice_summary(reference, currents)
-    names = {"P1 dF/F (%)": "P1 response", "P2 dF/F (%)": "P2 response"}
+    names = {"P1": "P1 peak", "P2": "P2 peak", "P1 dF/F (%)": "P1 response", "P2 dF/F (%)": "P2 response"}
     for key, (low, high, mean, in_range) in expected.items():
         name = names.get(key, key)
         assert summary[f"{name} min"] == low and summary[f"{name} max"] == high and summary[f"{name} mean"] == mean
@@ -112,7 +112,7 @@ def test_pulse_train_reproduces_the_11p_numbers(v2):
         normalised = v2.normalized_train(ratios, 10)
 
         for name in metrics:
-            assert values[name] == metrics[name]
+            assert values[name if name.startswith("BL") else f"{name} peak"] == metrics[name]
         for i in range(1, 11):
             assert values[f"P{i} response"] == ratios[f"P{i}/BL"]
             assert values[f"nP{i}/BL"] == normalised[f"nP{i}/BL"]
@@ -130,15 +130,16 @@ def test_measures_list_matches_the_measured_values():
     for protocol, recording in ((paired_pulse(), None), (pulse_train(), pulse_train().recordings[0])):
         trace = brightness_trace(1) if recording is None else (train_traces(1, 412)[0] / train_traces(1, 412)[1] - 1) * 100
         values = measure(protocol, trace, recording).values
-        per_recording = [m.name for m in protocol.measures() if m.per == "recording"]
-        assert per_recording == list(values)
+        assert [m.name for m in protocol.recording_measures()] == list(values)
+        written = [m.name for m in protocol.measures() if m.per == "recording"]
+        assert written == [name for name in values if not name.endswith(" peak")]
 
 
 def test_a_window_after_the_end_is_reported_not_crashed():
     protocol = paired_pulse()
     protocol.pulses[1].peak = Window(2000, 2100)
     result = measure(protocol, brightness_trace(0))
-    assert np.isnan(result.values["P2"]) and np.isnan(result.values["PPR"])
+    assert np.isnan(result.values["P2 peak"]) and np.isnan(result.values["PPR"])
     assert any("P2" in problem and "after the end" in problem for problem in result.problems)
 
 
@@ -396,3 +397,15 @@ def test_slice_summary_includes_the_fits_across_conditions():
     assert summary["IO half-max"] == pytest.approx(180.0, rel=1e-3)
     names = [m.name for m in protocol.measures() if m.per == "slice"]
     assert names[-3:] == ["IO half-max", "IO max", "IO steepness"]
+
+
+def test_slice_summary_means_over_a_condition_range_and_over_file_names():
+    from ema.evoked.protocol import BY_CONDITION, BY_FILES, SliceMean
+
+    protocol = paired_pulse_uncorrected()
+    protocol.summary_means = [SliceMean("100-400", BY_CONDITION, 100.0, 400.0), SliceMean("hi", BY_FILES, files=["hi*"])]
+    rows = [(100.0, {"P1 response": 10.0}), (300.0, {"P1 response": 20.0}), (None, {"P1 response": 40.0}),
+            (None, {"P1 response": 60.0}), (500.0, {"P1 response": 99.0})]
+    summary = summarise(protocol, rows, ["100uA.tif", "300uA.tif", "hi1.tif", "HI2.tif", "500uA.tif"])
+    assert summary["P1 response mean 100-400"] == 15.0 and summary["P1 response mean hi"] == 50.0
+    assert np.isnan(summarise(protocol, rows)["P1 response mean hi"])  # without file names, no recording is named hi

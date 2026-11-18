@@ -9,14 +9,15 @@ empty, what it reflects, what to be careful of, and a worked example.
 How measures are named
 ----------------------
 
-* Baselines, pulses, comparisons and fits have the names given in the
-  protocol: ``B1``, ``P1``, ``PPR``, ``Tau``.
-* What is measured on a pulse is named after it: ``P1 response``,
-  ``P1 half-decay``, ``P1 footprint width``.
+* Baselines, comparisons and fits have the names given in the protocol:
+  ``B1``, ``PPR``, ``Tau``.
+* What is measured on a pulse is named after it: ``P1 peak``,
+  ``P1 response``, ``P1 half-decay``, ``P1 footprint width``.
 * A near-to-far index is named after its comparison: ``PPR near-to-far``.
 * A slice value is named after the per-recording measure it summarises:
-  ``PPR mean``, ``P1 response mean 100-400``, ``B1 spread``; a fit across
-  conditions after the fit: ``Recovery time constant``.
+  ``PPR mean``, ``P1 response mean 100-400``, ``B1 spread``; a mean over
+  some recordings ends with its name (``P1 response mean hi``); a fit
+  across conditions is named after the fit: ``Recovery time constant``.
 
 An **empty** value means "could not be measured on this recording (or
 slice)"; it is never replaced by 0, and slice summaries leave it out.
