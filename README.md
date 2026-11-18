@@ -13,27 +13,91 @@ Your recordings are only read, never changed.
 
 ## Install (once per computer)
 
-1. Install **Python 3.9 or newer** from [python.org](https://www.python.org/downloads/). On Windows, tick
-   *Add python.exe to PATH*.
-2. In a terminal, go to this folder and install the packages EMA needs:
+You need two free programs, Python and Git, and then three lines typed in a terminal. It takes about ten minutes.
 
-   ```bash
-   python -m pip install -r requirements.txt
-   ```
+### 1. Install Python
 
-3. Optional: put an EMA icon on the Desktop.
+Download Python from [python.org/downloads](https://www.python.org/downloads/) (the big yellow button) and open
+the file you downloaded.
 
-   ```bash
-   python create_shortcut.py
-   ```
+- **Windows:** if the first screen of the installer has a box **Add python.exe to PATH**, tick it, then click
+  **Install Now**. The first time you type `py` (step 3), Windows may offer to install Python itself: say yes.
+- **Mac:** click **Continue** and **Agree** until it is installed.
+
+Use the Python from python.org, not one from the Microsoft Store or from Homebrew.
+
+### 2. Install Git
+
+Git downloads EMA, and later its updates.
+
+- **Windows:** download **Git for Windows** from [git-scm.com/download/win](https://git-scm.com/download/win)
+  (*Click here to download*), open it and click **Next** on every screen, then **Install**. The settings it
+  suggests are fine.
+- **Mac:** open **Terminal** (see step 3), type `git --version` and press Enter. If Git is missing, the Mac offers
+  to install the *command line developer tools*: click **Install**, and wait until it is done.
+
+### 3. Download and install EMA
+
+Open a terminal, a window where you type commands:
+
+- **Windows:** press the Windows key, type `cmd` and press Enter.
+- **Mac:** in Finder, open **Applications**, then **Utilities**, then **Terminal**.
+
+Type these three lines, one at a time, pressing Enter after each.
+
+**Windows:**
+
+```
+git clone https://github.com/ecohen227/EMA.git
+cd EMA
+py install.py
+```
+
+**Mac:**
+
+```
+git clone https://github.com/ecohen227/EMA.git
+cd EMA
+python3 install.py
+```
+
+The first line downloads EMA into a folder called **EMA** in your home folder (`C:\Users\<you>\EMA` on Windows,
+`/Users/<you>/EMA` on a Mac). The last line installs the packages EMA needs (a few minutes, with a lot of text
+scrolling by), builds the documentation and puts an **EMA** icon on the Desktop. It ends with *EMA is installed*.
 
 ## Start
 
-Double-click the Desktop icon or `EMA.pyw`, or run:
+Double-click the **EMA** icon on the Desktop. Without the icon: double-click `EMA.pyw` in the EMA folder.
 
-```bash
-python -m ema
+## Update
+
+When a new version of EMA is out, open a terminal and type, one line at a time (on a Mac, `python3` instead of
+`py`):
+
 ```
+cd EMA
+git pull
+py install.py
+```
+
+Your saved protocols and detectors, your settings and your results are kept.
+
+## If something goes wrong
+
+| The terminal says | What to do |
+|---|---|
+| `'py' is not recognized` (Windows) or `command not found: python3` (Mac) | Python is not installed: do step 1, then close the terminal, open a new one and try again. |
+| `'git' is not recognized` or `command not found: git` | Git is not installed: do step 2, then close the terminal, open a new one and try again. |
+| `destination path 'EMA' already exists` | EMA is downloaded already. Type `cd EMA`, then `py install.py` (Mac: `python3 install.py`). |
+| `externally-managed-environment` (Mac) | Your `python3` is not the one from python.org. Install Python from python.org (step 1), open a new Terminal and try again. |
+| `The packages could not be installed` | Check the internet connection and type the last line again. |
+| `Your local changes would be overwritten` (when updating) | A file of EMA itself was changed. Type `git stash`, then `git pull` again. |
+
+**Without Git:** on [github.com/ecohen227/EMA](https://github.com/ecohen227/EMA), click the green **Code** button,
+then **Download ZIP**, and unzip it. Open the unzipped folder (the one with `README.md`), click in the address bar
+at the top of the window, type `cmd` and press Enter. On a Mac, open Terminal, type `cd ` (with a space), drag the
+folder into the Terminal window and press Enter. Then type `py install.py` (Mac: `python3 install.py`). To update,
+download the ZIP again.
 
 ## Documentation
 
@@ -41,12 +105,8 @@ The documentation explains every package step by step, with figures. Press *Docu
 or open `docs/_build/html/index.html`. Start with *Quick start*: your first analysis with the defaults, nothing to
 configure.
 
-If the `docs/_build` folder is missing, build the documentation once:
-
-```bash
-python -m pip install -r requirements-dev.txt
-python -m sphinx docs docs/_build/html
-```
+The documentation is built by `install.py`. If the *Documentation* button says it has not been built yet, run
+`install.py` again (step 3, last line).
 
 ## For developers
 

@@ -7,3 +7,6 @@ dist/
 .venv/
 docs/_build/
 docs/_generated/
+# what each user saves in the EMA folder
+protocols/
+detectors/

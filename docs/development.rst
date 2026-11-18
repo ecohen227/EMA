@@ -149,6 +149,9 @@ wash-on);
 ``docs/examples``, which the pages on the Excel files show and offer for
 download. They are only needed after a change to the measuring or to the
 windows; the pictures are stored in ``docs/figures`` and ``docs/screenshots``.
+``python docs/make_icon.py`` draws EMA's icon (``ema/assets/ema.png`` and
+``ema.ico``, 16 to 256 pixels) from its drawings ``ema/assets/ema.svg`` and,
+for 32 pixels and less, ``ema_small.svg``, which has thicker lines.
 The tables of settings and the measure references are written from the code
 each time the documentation is built (see ``docs/conf.py``). The
 *Documentation* button of the start window opens ``docs/_build/html/index.html``.

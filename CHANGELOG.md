@@ -4,6 +4,11 @@
 
 ### Changed for users
 
+- A new icon: the same glowing response, ROI ring and paired-pulse trace, drawn as vector shapes instead of a noisy,
+  jagged picture, so its lines are solid and sharp at every size. The drawing is kept in `ema/assets/ema.svg` (with
+  `ema_small.svg`, thicker lines for 32 pixels and less); `docs/make_icon.py` writes `ema.png` and `ema.ico` from it,
+  each size drawn rather than shrunk. A desktop shortcut made before may show the old icon until it is made again
+  (`python create_shortcut.py`) or Windows refreshes its icons.
 - Evoked: each pulse's peak (`P1 peak`) is written only when *Write the peak of each pulse too* is ticked (tab
   *Pulses and windows*); its response always is. Off in the built-in protocols and in new ones; protocol files saved
   without the entry (`write_peaks`) keep writing the peaks. The peaks are still measured and summarised, so fits
@@ -19,6 +24,13 @@
 
 ### New
 
+- One-step install: `install.py` installs the packages EMA needs, builds the documentation and
+  makes the Desktop icon in one go, with this same Python throughout (`py install.py` on Windows, `python3 install.py`
+  on a Mac), and is run again after an update. The README and *Getting started* now say, step by step, how to install
+  Python and Git, download EMA with `git clone https://github.com/ecohen227/EMA.git`, update it with `git pull`, do
+  without Git (*Download ZIP*), and what to do about the messages most often met. The start window's
+  *Documentation* button points to `install.py` when the documentation is not built. Saved protocols and detectors
+  (`protocols/`, `detectors/` in the EMA folder) are in `.gitignore`, so an update never touches them.
 - ROI Selection: *Each recording* (next to *Show*) hides the strip of cards. Only the recordings the mean recording is
   made of are then read and kept (8 instead of 24 in memory), which is faster and needs far less memory; any
   recording can still be shown from the *Recording* list. EMA remembers the choice (`roi_show_each_recording`).

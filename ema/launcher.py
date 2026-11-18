@@ -1,5 +1,7 @@
 """The first window of EMA: pick one of its packages, in the order they are used."""
 
+import sys
+
 from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import QLabel, QMessageBox, QPushButton, QSizePolicy, QVBoxLayout, QWidget
@@ -97,7 +99,6 @@ class Launcher(QWidget):
             QMessageBox.information(
                 self,
                 "Documentation",
-                "The documentation has not been built yet.\n\nIn the EMA folder, run:\n"
-                "python -m pip install -r requirements-dev.txt\n"
-                "python -m sphinx docs docs/_build/html",
+                "The documentation has not been built yet.\n\nOpen a terminal in the EMA folder and type:\n"
+                + ("py install.py" if sys.platform == "win32" else "python3 install.py"),
             )
