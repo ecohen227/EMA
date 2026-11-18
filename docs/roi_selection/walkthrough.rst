@@ -164,16 +164,18 @@ was found automatically.
 5. Review and flag the recordings
 ---------------------------------
 
-The strip under the plots has one card per recording, after a first card
-for the mean recording. Each card shows
+The strip under the plots has one card per recording (except those hidden
+with *Hide in the strip*, below), after a first card for the mean
+recording. Each card shows
 
 * the response map at the peak, with the ROI on it,
 * the trace of the ROI,
 * the peak of that trace in percent.
 
 All cards share one colour scale and one trace scale. A weak response looks
-dim and flat next to a strong one, and an unstimulated recording looks
-empty, so a recording that does not fit stands out without opening it.
+dim and flat next to a strong one, and an unstimulated recording (when it is
+shown) looks empty, so a recording that does not fit stands out without
+opening it.
 
 * **Click** a card to show that recording in the plots above.
 * **Right-click** a card to flag it, or to remove its flag. The recording
@@ -194,10 +196,13 @@ recordings out. The mean recording cannot be flagged.
 
    A flagged recording. The slider has been moved past the peak.
 
-Untick **Each recording** (next to *Show*, at the top) to hide the strip.
-Then only the recordings the mean recording is made of are read, which is
-faster and needs much less memory; any recording can still be shown by
-choosing it in the *Recording* list. EMA remembers the choice.
+**Hide in the strip** (next to *Show*, at the top) leaves out the recordings
+whose file name contains one of the words typed, separated by commas (upper
+and lower case alike). It holds ``no`` at first, so the unstimulated
+recordings (``no1.tif``, ``no2.tif`` …) get no card. Hidden recordings are not
+read for the strip, which saves time and memory; any of them can still be
+shown, and flagged, by choosing it in the *Recording* list. Empty the box for
+a card for every recording. EMA remembers what you type.
 
 The cards are filled one after another while the recordings are read, so
 the window can be used straight away.

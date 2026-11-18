@@ -31,9 +31,11 @@
   without Git (*Download ZIP*), and what to do about the messages most often met. The start window's
   *Documentation* button points to `install.py` when the documentation is not built. Saved protocols and detectors
   (`protocols/`, `detectors/` in the EMA folder) are in `.gitignore`, so an update never touches them.
-- ROI Selection: *Each recording* (next to *Show*) hides the strip of cards. Only the recordings the mean recording is
-  made of are then read and kept (8 instead of 24 in memory), which is faster and needs far less memory; any
-  recording can still be shown from the *Recording* list. EMA remembers the choice (`roi_show_each_recording`).
+- ROI Selection: *Hide in the strip* (next to *Show*) leaves out of the strip of cards the recordings whose file name
+  contains one of the words typed, separated by commas (upper and lower case alike); it holds `no` at first, so the
+  unstimulated recordings get no card. Hidden recordings are not read ahead for the strip, which saves time and
+  memory; they can still be shown and flagged from the *Recording* list. EMA remembers the words
+  (`roi_hide_in_strip`).
 - Evoked Analysis Configurator: a sixth tab, *Exclusions*, leaves slices out of both tables. Each exclusion makes one
   value per slice from one per-recording measure over its recordings (all, a condition range, or file names such as
   `hi*`): its spread ((largest − smallest) ÷ largest or ÷ smallest × 100), range, coefficient of variation, mean,

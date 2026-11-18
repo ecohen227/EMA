@@ -142,10 +142,12 @@ class RecordingStrip(QScrollArea):
             card.update()
 
     def select(self, key):
+        """Mark the card of the recording on show; none when it has no card (it is hidden in the strip)."""
         for card in self.cards.values():
             card.selected = card.key == key
             card.update()
-        self.ensureWidgetVisible(self.cards[key])
+        if key in self.cards:
+            self.ensureWidgetVisible(self.cards[key])
 
     def show_flags(self, flagged_keys):
         for card in self.cards.values():

@@ -62,15 +62,6 @@ def test_a_recording_dropped_by_stop_is_read_when_wanted(io_folder):
     assert not cache._stacks and not cache._reading
 
 
-def test_the_recording_cache_can_keep_fewer(io_folder):
-    cache = RecordingCache(3)
-    for path in list_recordings(io_folder)[:3]:
-        cache(path)
-    cache.resize(1)
-    assert list(cache._stacks) == [list_recordings(io_folder)[2]]
-    cache.stop()
-
-
 def test_single_image_is_not_a_movie(recordings):
     with pytest.raises(ValueError, match="not a movie"):
         load_stack(recordings / "Animal 1" / "Slice 1" / "reference.tif")

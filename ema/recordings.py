@@ -75,9 +75,9 @@ class RecordingCache:
     """Reads recordings with `load` and keeps the last `size` in memory; call it like `load_stack`.
 
     `read_ahead(paths)` reads recordings in a background thread, so that
-    they are ready by the time they are wanted. `resize(size)` keeps fewer or
-    more. `stop()` drops what is waiting to be read and empties the cache for
-    good: recordings asked for afterwards are read but no longer kept.
+    they are ready by the time they are wanted. `stop()` drops what is
+    waiting to be read and empties the cache for good: recordings asked for
+    afterwards are read but no longer kept.
     """
 
     def __init__(self, size, load=load_stack):
@@ -114,12 +114,6 @@ class RecordingCache:
             for path in map(Path, paths):
                 if path not in self._stacks and path not in self._reading:
                     self._reading[path] = self._reader.submit(self._read, path)
-
-    def resize(self, size):
-        """Keep at most `size` recordings from now on; the least recently used go first."""
-        with self._lock:
-            self.size = size
-            self._trim()
 
     def stop(self):
         with self._lock:

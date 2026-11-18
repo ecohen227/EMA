@@ -149,7 +149,12 @@ def test_redrawing_the_electrode(window, io_folder):
 # ---------------------------------------------------------------------------
 
 
-def test_strip_shows_every_recording(window):
+def test_strip_shows_every_recording_but_the_hidden(window):
+    assert window.hide_box.text() == "no"  # the unstimulated recordings are hidden unless the user says otherwise
+    assert list(window.strip.cards) == [MEAN, "100uA.tif", "200uA.tif", "300uA.tif"]
+    window.hide_box.setText("")
+    window.hide_box.editingFinished.emit()
+    window.finish_strip()
     cards = window.strip.cards
     assert list(cards) == [MEAN, "100uA.tif", "200uA.tif", "300uA.tif", "no1.tif"]
     assert all(card.picture is not None for card in cards.values())
@@ -355,24 +360,28 @@ def test_launcher_offers_every_package_in_order(app):
     assert len(packages) == len(PACKAGES) == 5
 
 
-def test_without_a_card_for_each_recording_only_the_mean_recording_is_read(app, recordings, tmp_path):
-    from ema.roi_selection.window import KEPT_MEAN_ONLY, KEPT_WITH_CARDS
-
-    user_settings.remember(roi_show_each_recording=False)
+def test_recordings_hidden_in_the_strip_are_not_read_but_can_be_shown(app, recordings, tmp_path):
+    user_settings.remember(roi_hide_in_strip="UA, red")  # remembered from an earlier session; upper/lower case alike
     window = RoiSelectionWindow(Selections(recordings), tmp_path)
     window.show()
     window.folder_list.setCurrentRow(1)
-    assert window.strip.isHidden() and not window.cards_to_fill and window.load.size == KEPT_MEAN_ONLY
-    read = {path.name for path in [*window.load._stacks, *window.load._reading]}
-    assert "no1.tif" not in read  # not one of the recordings the mean is made of
-    window.choose_recording("no1.tif")  # but it can still be shown
-    assert window.recording == "no1.tif" and window.stack is not None
-
-    window.cards_box.setChecked(True)
+    assert window.hide_box.text() == "UA, red" and list(window.strip.cards) == [MEAN, "no1.tif"]
     window.finish_strip()
-    assert window.strip.isVisible() and window.load.size == KEPT_WITH_CARDS
+    reading = {path.name for path in window.load._reading}
+    assert not reading & {"100uA.tif", "200uA.tif", "300uA.tif"}  # hidden: not read ahead
+    window.choose_recording("300uA.tif")  # a hidden recording can still be shown and flagged
+    assert window.recording == "300uA.tif" and window.stack is not None
+    assert not any(card.selected for card in window.strip.cards.values())
+    window.flag_recording(True)
+    assert window.selection.is_flagged("300uA.tif")
+
+    window.hide_box.setText(" no ,, ")
+    window.hide_box.editingFinished.emit()
+    assert window.hide_box.text() == "no" and user_settings.remembered("roi_hide_in_strip") == "no"
+    assert list(window.strip.cards) == [MEAN, "100uA.tif", "200uA.tif", "300uA.tif"]
+    window.finish_strip()
+    assert window.strip.cards["300uA.tif"].selected and window.strip.cards["300uA.tif"].flagged
     assert all(card.picture is not None for card in window.strip.cards.values())
-    assert user_settings.remembered("roi_show_each_recording") is True
     window.close()
 
 
